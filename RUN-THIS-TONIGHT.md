@@ -1,6 +1,6 @@
-# Stocklana submission runbook
+# DoubleTake submission runbook (Stocklana hackathon)
 
-The live public demo is https://files.instinct.com/file-01M3BHWQX667B53JQVJ8HCZF0N . Source package accompanies it. The named GitHub repository https://github.com/RafaTahir/stocklana currently exists but remains empty until source is pushed there.
+Live demo and GitHub URLs must be verified after the DoubleTake redeploy and repo rename. The prior public demo is https://stocklana-app.vercel.app and the prior source repo is https://github.com/RafaTahir/stocklana; do not submit a new URL until it is checked.
 
 ## Before submitting
 

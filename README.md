@@ -1,6 +1,6 @@
-# Stocklana | Which price is real?
+# DoubleTake | Which price is real?
 
-**A read-only, live venue-gap viewer for tokenized stocks on Solana.** Solo project for the 2026 Stocklana hackathon.
+**A read-only, live venue-gap viewer for tokenized stocks on Solana.** Solo project for the 2026 Stocklana hackathon. Formerly named Stocklana; the hackathon name is unchanged.
 
 ## The relatable problem
 
