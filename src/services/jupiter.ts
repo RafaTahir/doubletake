@@ -1,0 +1,2 @@
+export type Quote={inputAmount:number;outputAmount:number;minOutputAmount:number;priceImpactPct:number;route:{venue:string;percent:number;feeAmount?:string;feeMint?:string}[];slippageBps:number;platformFee:null|{amount:string;feeBps:number};quotedAt:number;source:string};
+export async function getQuote(mint:string,direction:'buy'|'sell'):Promise<Quote>{const r=await fetch(`/api/quote?mint=${encodeURIComponent(mint)}&direction=${direction}`,{signal:AbortSignal.timeout(16000)});const d=await r.json();if(!r.ok)throw Error(d.error||'Quote unavailable');return d}
