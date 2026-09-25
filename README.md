@@ -11,7 +11,7 @@
 1. Open the live demo. The example balances are explicitly fictional; the market quotes load live.
 2. Look at AAPLx, TSLAx and NVDAx. Each card selects the two USDC pools with the most reported USD liquidity above $1,000 and shows their respective token prices and percentage venue gap.
 3. Open Pool A or Pool B to inspect the source market. Tap Refresh prices.
-4. Paste a public Solana mainnet wallet address to attempt a live SPL Token and Token-2022 lookup. Some public RPC endpoints may reject browser requests, so the example route remains the reliable demo.
+4. Use the one-tap asset selection, expand a card to see liquidity and the in-memory live gap trail (45-second checks while visible), or paste a public Solana mainnet wallet address to attempt a live SPL Token and Token-2022 lookup. Some public RPC endpoints may reject browser requests, so the example route remains the reliable demo.
 5. Read the explanation below: different clocks, different markets, different depth.
 
 ## Why Solana?
@@ -40,4 +40,4 @@ Single-page React/TypeScript app. No backend, wallet signature, custody, contrac
 
 ## Run and extend
 
-This is an Instinct Files source project using React and `@instinct/files` supplied by the host. `src/main.tsx` mounts the UI; no secret or API key is bundled. To port to a conventional Vite host, install React, React DOM, TypeScript and the Files kit or replace its layout primitives. Set up a reliable first-party Solana RPC proxy if wallet lookup is important, and an authenticated server-side market feed if comparing the actual US share price. Preserve the distinction between share, issuer indicative token, and pool execution quotes.
+This is a React + TypeScript + Vite app with local layout components. Run `npm ci`, `npm run dev` for local development, and `npm run build` for the deployable `dist/` folder. No secret or API key is bundled. Vercel project: `stocklana`, team `rafaeitahir-5792s-projects`, production alias `https://doubletake-app.vercel.app`. A first-party Solana RPC proxy would be needed to make wallet lookup reliable; this demo falls back gracefully when browser RPC calls fail. Preserve the distinction between share, issuer indicative token, and pool execution quotes.
