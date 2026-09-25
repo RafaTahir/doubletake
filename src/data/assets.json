@@ -1,0 +1,32 @@
+[
+  {
+    "symbol": "AAPLx",
+    "name": "Apple xStock",
+    "underlying": "AAPL",
+    "mint": "XsbEhLAtcf6HdfpFZ5xEMdqW8nfAvcsP5bdudRLJzJp"
+  },
+  {
+    "symbol": "TSLAx",
+    "name": "Tesla xStock",
+    "underlying": "TSLA",
+    "mint": "XsDoVfqeBukxuZHWhdvWHBhgEHjGNst4MLodqsJHzoB"
+  },
+  {
+    "symbol": "NVDAx",
+    "name": "NVIDIA xStock",
+    "underlying": "NVDA",
+    "mint": "Xsc9qvGR1efVDFGLrVsmkzv3qi45LTBjeUKSPmx9qEh"
+  },
+  {
+    "symbol": "MSFTx",
+    "name": "Microsoft xStock",
+    "underlying": "MSFT",
+    "mint": "XspzcW1PRtgf6Wj92HCiZdjzKCyFekVD8P5Ueh3dRMX"
+  },
+  {
+    "symbol": "GOOGLx",
+    "name": "Alphabet xStock",
+    "underlying": "GOOGL",
+    "mint": "XsCPL9dNWBMvFtTmwcCA5v3xWPSMEBCszbQdiLLq6aN"
+  }
+]
