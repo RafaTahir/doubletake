@@ -45,3 +45,7 @@ This is a React + TypeScript + Vite app with local layout components. Run `npm c
 ## Phase 1 trading preview
 
 Each card has a separate read-only Jupiter route quote for 10 USDC → xStock and 0.01 xStock → USDC. The route uses Jupiter Lite Swap V1 quote, not Swap V2 Order/Execute, requires no API key, and is explicitly indicative. No transaction is assembled, signed, or submitted. Quotes have no integrator fee, so there is no fee revenue yet. Actual execution, referral-account setup, exact fee disclosure and confirmation need separate Phase 2 work and approval.
+
+## Arbitrage screening (not execution)
+
+The cost screen compares the DexScreener observed gross spot spread with a Jupiter unrestricted $100 USDC → xStock → USDC quote round trip, then subtracts another 1% two-leg slippage stress and $0.02 assumed network cost. A negative estimate is labeled not viable at this size; a positive estimate is only an unverified candidate. The Jupiter routes are *not locked to the two displayed pools*, the legs are quoted sequentially, liquidity changes, and actual network fees can differ. The displayed estimates are not realized arbitrage, promises of profit, investment advice, or transactions. Execution remains disabled.
