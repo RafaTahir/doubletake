@@ -45,6 +45,7 @@ for (const asset of ASSETS) {
     const fetch = mockQuotes(t);
     const result = await invoke(quoteHandler, { mint: asset.mint, direction: 'buy' });
     assert.equal(result.statusCode, 200);
+    assert.equal(new URL(fetch.mock.calls[0].arguments[0]).origin, 'https://api.jup.ag');
     assert.equal(new URL(fetch.mock.calls[0].arguments[0]).searchParams.get('amount'), '10000000');
     assert.equal(result.body.inputAmount, 10);
     assert.equal(result.body.outputAmount, 0.02913913);
@@ -68,6 +69,33 @@ test('sell quotes 0.01 xStock as 1000000 raw units, output USDC uses six decimal
   assert.equal(result.body.outputAmount, 3.43);
   assert.equal(result.body.inputDecimals, 8);
   assert.equal(result.body.outputDecimals, 6);
+});
+
+test('Jupiter API key is sent only upstream when configured', async t => {
+  const previous = process.env.JUPITER_API_KEY;
+  t.after(() => {
+    if (previous === undefined) delete process.env.JUPITER_API_KEY;
+    else process.env.JUPITER_API_KEY = previous;
+  });
+  process.env.JUPITER_API_KEY = 'test-only-api-key';
+  const fetch = mockQuotes(t);
+  const result = await invoke(quoteHandler, { mint: AAPL });
+  assert.equal(result.statusCode, 200);
+  assert.deepEqual(fetch.mock.calls[0].arguments[1].headers, { 'x-api-key': 'test-only-api-key' });
+  assert.equal(JSON.stringify(result.body).includes('test-only-api-key'), false);
+  assert.equal(result.body.source, 'Jupiter Swap V1');
+});
+
+test('keyless requests omit the authentication header', async t => {
+  const previous = process.env.JUPITER_API_KEY;
+  t.after(() => {
+    if (previous === undefined) delete process.env.JUPITER_API_KEY;
+    else process.env.JUPITER_API_KEY = previous;
+  });
+  delete process.env.JUPITER_API_KEY;
+  const fetch = mockQuotes(t);
+  await invoke(quoteHandler, { mint: AAPL });
+  assert.equal(fetch.mock.calls[0].arguments[1].headers, undefined);
 });
 
 test('round trip preserves exact raw leg handoff, signed loss, routes and earliest timestamp', async t => {

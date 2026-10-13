@@ -33,7 +33,7 @@ export default async function handler(req, res) {
       platformFee: quote.platformFee || null,
       quotedAt: quote.quotedAt,
       ...(quote.contextSlot !== undefined ? { contextSlot: quote.contextSlot } : {}),
-      source: 'Jupiter Lite Swap V1',
+      source: 'Jupiter Swap V1',
       note: 'Indicative only. xStock amounts are unscaled token units. No transaction is prepared or signed.',
     });
   } catch (error) {

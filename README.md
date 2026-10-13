@@ -47,7 +47,7 @@ npm run build
 
 Use Node.js 22 or later. The checked-in `.npmrc` matches the lockfile's legacy peer dependency resolution. `npm test` checks quote units, raw amount handoff, calculation correctness, expiry and unavailable states. `npm run build` type-checks and generates `dist/`. Vite alone serves the frontend; `/api` functions need a Vercel-compatible development runtime for wallet and quote requests. Configure `SOLANA_RPC_URL` on the server for reliable balance lookup; the public RPC fallback can be rate-limited. No private key is required.
 
-The prototype currently uses Jupiter Lite Swap V1. Jupiter's current documentation directs new integrations toward its maintained API; migration and credentials remain follow-up work. Endpoint availability is a live dependency.
+The prototype uses Jupiter Swap V1 through `api.jup.ag`. Keyless access works with provider rate limits; optionally configure `JUPITER_API_KEY` as a server-only Vercel environment variable for the account's API quota. Quotes are requested manually to avoid a burst on page load. Endpoint availability is a live dependency.
 
 ## Limits and next milestone
 
