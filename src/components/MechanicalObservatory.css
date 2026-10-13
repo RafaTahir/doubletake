@@ -1,0 +1,87 @@
+.mechanical-observatory {
+  position: relative;
+  width: 100%;
+  max-width: 720px;
+  color: #c1a373;
+  isolation: isolate;
+}
+
+.mechanical-observatory::before {
+  content: '';
+  position: absolute;
+  inset: 12% 8%;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(170, 122, 60, .1), transparent 65%);
+  z-index: -1;
+}
+
+.mechanical-observatory svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.observatory-dial-label {
+  font: 600 11px Georgia, 'Times New Roman', serif;
+  letter-spacing: 2.8px;
+  fill: #344537;
+}
+
+.observatory-dial-caption {
+  font: 7px 'Courier New', monospace;
+  letter-spacing: 1.2px;
+  fill: #6a674e;
+}
+
+.observatory-plaque-title {
+  font: 600 8.5px Georgia, 'Times New Roman', serif;
+  letter-spacing: 1.9px;
+  fill: #ecd2a0;
+}
+
+.observatory-plaque-caption {
+  font: 8px 'Courier New', monospace;
+  letter-spacing: 1.1px;
+  fill: #ecd2a0;
+}
+
+.observatory-footnote {
+  font: 8px 'Courier New', monospace;
+  letter-spacing: 2px;
+  fill: currentColor;
+  opacity: .6;
+}
+
+.observatory-gear {
+  animation: observatory-wind 2.4s cubic-bezier(.2, .65, .3, 1) both;
+}
+
+.observatory-gear-reverse {
+  animation-name: observatory-unwind;
+}
+
+.observatory-needle {
+  transform: rotate(var(--needle-angle));
+  animation: observatory-settle 2s cubic-bezier(.19, 1, .22, 1) both;
+}
+
+@keyframes observatory-wind {
+  from { transform: rotate(-60deg); }
+  to { transform: rotate(0deg); }
+}
+
+@keyframes observatory-unwind {
+  from { transform: rotate(60deg); }
+  to { transform: rotate(0deg); }
+}
+
+@keyframes observatory-settle {
+  from { transform: rotate(-115deg); }
+  to { transform: rotate(var(--needle-angle)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .observatory-gear,
+  .observatory-needle { animation: none; }
+}
