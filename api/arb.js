@@ -1,18 +1,43 @@
-const USDC='EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
-const MINTS=new Set(['XsbEhLAtcf6HdfpFZ5xEMdqW8nfAvcsP5bdudRLJzJp','XsDoVfqeBukxuZHWhdvWHBhgEHjGNst4MLodqsJHzoB','Xsc9qvGR1efVDFGLrVsmkzv3qi45LTBjeUKSPmx9qEh','XspzcW1PRtgf6Wj92HCiZdjzKCyFekVD8P5Ueh3dRMX','XsCPL9dNWBMvFtTmwcCA5v3xWPSMEBCszbQdiLLq6aN']);
-const INPUT=100000000; // $100 USDC; USDC and the five listed xStocks have six decimals.
-async function quote(inputMint,outputMint,amount){
- const url=new URL('https://lite-api.jup.ag/swap/v1/quote');Object.entries({inputMint,outputMint,amount:String(amount),slippageBps:'50'}).forEach(([k,v])=>url.searchParams.set(k,v));
- const r=await fetch(url,{signal:AbortSignal.timeout(12000)});if(!r.ok)throw Error(`Jupiter HTTP ${r.status}`);const d=await r.json();if(d.error||!d.outAmount)throw Error(d.error||'No quote');return d;
-}
-export default async function handler(req,res){
- if(req.method!=='GET')return res.status(405).json({error:'GET only'});
- const mint=String(req.query.mint||'');if(!MINTS.has(mint))return res.status(400).json({error:'Unsupported mint'});
- try {
-   const buy=await quote(USDC,mint,INPUT),tokens=BigInt(buy.outAmount);
-   if(tokens<=0n)throw Error('Buy route has zero output');
-   const sell=await quote(mint,USDC,tokens.toString());
-   const returned=Number(sell.outAmount)/1e6;
-   res.setHeader('Cache-Control','no-store');return res.status(200).json({notionalUsdc:100,buyTokens:Number(buy.outAmount)/1e6,sellUsdc:returned,roundTripDragPct:Math.max(0,(100-returned)),buyRoute:(buy.routePlan||[]).map(p=>p.swapInfo?.label).filter(Boolean),sellRoute:(sell.routePlan||[]).map(p=>p.swapInfo?.label).filter(Boolean),quotedAt:Date.now(),note:'Unrestricted Jupiter round trip. Not pool-specific, not simultaneous, and not executable arbitrage. Fees and price impact are reflected in quoted outputs; network costs and slippage are modeled separately.'});
- }catch(e){return res.status(503).json({error:'Cannot verify two live routes right now. No arbitrage estimate available.',detail:String(e.message||e).slice(0,140)})}
+import { USDC, assetForMint, displayAmount } from '../lib/assets.js';
+import { fetchQuote, routeDetails } from '../lib/jupiter.js';
+
+const INPUT_RAW = '100000000'; // 100 USDC, at six decimals.
+
+export default async function handler(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'GET only' });
+  const mint = String(req.query.mint || '');
+  const asset = assetForMint(mint);
+  if (!asset) return res.status(400).json({ error: 'Unsupported mint' });
+  try {
+    const buy = await fetchQuote(USDC.mint, mint, INPUT_RAW);
+    // Keep the exact integer output; display rounding must never enter leg two.
+    const sell = await fetchQuote(mint, USDC.mint, buy.outAmount);
+    const notionalUsdc = displayAmount(INPUT_RAW, USDC.decimals);
+    const sellUsdc = displayAmount(sell.outAmount, USDC.decimals);
+    const quotedPnlUsdc = Number(BigInt(sell.outAmount) - BigInt(INPUT_RAW)) / 10 ** USDC.decimals;
+    res.setHeader('Cache-Control', 'no-store');
+    return res.status(200).json({
+      notionalUsdc,
+      buyTokens: displayAmount(buy.outAmount, asset.decimals),
+      sellUsdc,
+      quotedPnlUsdc,
+      quotedPnlPct: quotedPnlUsdc / notionalUsdc * 100,
+      inputAmountRaw: INPUT_RAW,
+      buyAmountRaw: buy.outAmount,
+      sellAmountRaw: sell.outAmount,
+      buyRoute: routeDetails(buy.routePlan),
+      sellRoute: routeDetails(sell.routePlan),
+      buyQuotedAt: buy.quotedAt,
+      sellQuotedAt: sell.quotedAt,
+      quotedAt: buy.quotedAt,
+      ...(buy.contextSlot !== undefined ? { buyContextSlot: buy.contextSlot } : {}),
+      ...(sell.contextSlot !== undefined ? { sellContextSlot: sell.contextSlot } : {}),
+      note: 'Sequential unrestricted Jupiter quotes, not an executable or simultaneous arbitrage. Quoted output includes route fees and price impact; network costs and slippage are excluded. xStock amounts are unscaled token units.',
+    });
+  } catch (error) {
+    return res.status(503).json({
+      error: 'Cannot verify two live routes right now. No round-trip estimate available.',
+      detail: String(error?.message || error).slice(0, 140),
+    });
+  }
 }
