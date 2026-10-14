@@ -4,7 +4,7 @@ Real funding, automation and verified email require the setup below. The founder
 
 | Service | Purpose | Setup |
 |---|---|---|
-| Railway | Runs app, API and keeper | Create project from this branch, use Dockerfile, mount persistent volume, set US$20 hard monthly usage ceiling |
+| Railway | Runs app, API and keeper | Account is accessible; grant the Railway GitHub application repository access, deploy this branch with Dockerfile, mount persistent volume, set US$20 hard monthly usage ceiling |
 | Supabase | Persistent Postgres | Create free project, obtain server connection URL with `sslmode=verify-full`, configure trusted CA if required |
 | Helius | Reliable Solana RPC | Create free-tier mainnet key, put private endpoint in `SOLANA_RPC_URL`, keep paid upgrades off |
 | Resend | Verification/transaction email | Create free account, verify your own domain through DNS, create sending key and webhook secret |
@@ -21,9 +21,11 @@ The repository includes a public-workspace adapter for the existing `doubletake-
 
 `vercel.json` routes API requests through `api/public-workspace.ts`; `.vercelignore` excludes the earlier research endpoints, private environment files, local state and program/keypair artifacts. Public snapshots retain source timestamps, deduplicate concurrent work and cache for at most five seconds. Public RPC can throttle or fail; the response then identifies unavailable data. Per-instance rate/credit counters reset when instances restart and are not a durable hosting-wide budget control.
 
-Verify the preview's configuration, real market responses, mobile navigation and disabled actions before promotion. The Vercel project retains its historical `stocklana` project name and deployment identifiers. Manual deployment is supported; automatic Git deployments remain disabled for `codex/product-beta`. Preview deployment `dpl_Eju2bY2NaceWgNv59exhUXpXPS95` passed signed-out API checks on 15 October 2026; production promotion remains pending. See [release evidence](RELEASE-STATUS.md) for its verified scope.
+Verify the preview's configuration, real market responses, mobile navigation and disabled actions before promotion. The Vercel project retains its historical `stocklana` project name and deployment identifiers. Manual deployment is supported; automatic Git deployments remain disabled for `codex/product-beta`. Production deployment `dpl_6ZjRhHFdzspPzpYt3sfiE43tMQGW`, built from commit `a6696721a8d536d94f98ef97aaef38297e8b06d0`, now serves [doubletake-app.vercel.app](https://doubletake-app.vercel.app/). Signed-out API and browser checks passed on 15 October 2026. See [release evidence](RELEASE-STATUS.md) for the verified scope; account and financial services remain disabled.
 
 ### Persistent Railway service
+
+The Railway account is accessible, but the Railway GitHub application does not yet have access to this repository. Complete that repository connection before deployment. No persistent Railway service or canonical URL migration is recorded yet.
 
 1. Deploy this branch to Railway with one replica. Set `APP_ORIGIN` to its generated HTTPS origin.
 2. Set `DATABASE_URL`, a random `SESSION_SECRET` of at least 32 characters and distinct 32-byte hex keys for `FEE_ENCRYPTION_KEY` and `BACKUP_ENCRYPTION_KEY`. Store recovery copies securely with the founder. Losing the fee key can prevent refunds. Never paste secrets in chat.
