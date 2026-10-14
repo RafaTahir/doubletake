@@ -5,6 +5,11 @@
   "regions": ["sin1"],
   "redirects": [
     {
+      "source": "/",
+      "destination": "https://doubletake-production-446f.up.railway.app/",
+      "permanent": false
+    },
+    {
       "source": "/:path*",
       "destination": "https://doubletake-production-446f.up.railway.app/:path*",
       "permanent": false
