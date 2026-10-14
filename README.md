@@ -44,9 +44,11 @@ Token-2022 issuer metadata is checked before quoting/execution. Scaled-amount ch
 
 The browser reconstructs owner messages, checks instructions/accounts/amounts against the reviewed action, requires a build-pinned program ID and rejects changed wallet messages. Execution uses a reviewed address lookup table; owner exits use explicit accounts.
 
-## Launch
+## Hosting and launch
 
-[Setup guide](docs/BETA-SETUP.md) covers accounts, domain, migrations and release sequence. [Release status](docs/RELEASE-STATUS.md) records checks and open gates. Railway becomes canonical only after its real URL exists and is verified. The current [Vercel site](https://doubletake-app.vercel.app/) serves the earlier application until cutover.
+The Vercel deployment adapter serves the current workspace and public pool observations without account credentials. It exposes configuration, anonymous session status and seven live market snapshots. Funding, strategy actions, transaction preparation, RPC proxying and automation return a configuration-required state. This deployment has no database, transaction signer or keeper. Its five-second cache and request limit are per function instance; they do not enforce a deployment-wide monthly RPC budget.
+
+[Setup guide](docs/BETA-SETUP.md) covers accounts, domain, migrations and release sequence. [Release status](docs/RELEASE-STATUS.md) records checks and open gates. The updated adapter has passed signed-out preview verification, including all seven real market responses and disabled financial controls; production promotion is pending. The existing [Vercel site](https://doubletake-app.vercel.app/) remains the public address until promotion is verified. Railway becomes canonical only after its real URL and persistent service are verified.
 
 Mainnet requires reproducible program verification, a published upgrade authority separate from keeper credentials, independent engineering review and a founder-approved canary. Engineering review is not a formal external audit. Funding remains disabled while a gate is open.
 

@@ -1,0 +1,18 @@
+# Earlier research endpoints remain in git for history and calculation tests.
+# Only api/public-workspace.ts is part of the Vercel deployment.
+api/arb.js
+api/holdings.js
+api/quote.js
+
+node_modules/
+node_modules-linux/
+dist/
+build/
+.local/
+.env*
+.vercel/
+onchain/
+*.keypair.json
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm

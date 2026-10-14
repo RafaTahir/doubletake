@@ -1,14 +1,15 @@
 # Beta release evidence
 
-Verification date: 15 October 2026. This branch implements the application, persistent API, keeper, prepaid-fee accounting and guarded Solana program. Funding and automation are disabled by default. The existing Vercel site serves the earlier application; no new public deployment or mainnet execution is recorded.
+Verification date: 15 October 2026. This branch implements the application, persistent API, keeper, prepaid-fee accounting and guarded Solana program. Funding and automation are disabled by default. A separate Vercel adapter exposes the current workspace and public market observations while persistent services await setup. The updated adapter has passed signed-out hosted preview checks; production promotion and mainnet execution are not recorded in this revision.
 
 ## Verified locally
 
 | Area | Evidence |
 |---|---|
-| Application and API | `npm test`: 68 tests passed, including the existing quote/calculation tests and 24 backend tests using embedded Postgres and the real Fastify API |
+| Application and API | `npm test`: 71 tests passed, including the existing quote/calculation tests, 24 backend tests using embedded Postgres and the real Fastify API, and three public-workspace adapter tests |
+| Vercel adapter | Tests verify constant disabled funding/automation gates, explicit unavailable account/actions, source timestamps, five-second cache expiry, request deduplication and bounded per-instance requests. Hosted signed-out preview returned configuration/session HTTP 200 and seven actual pool observations with fees, prices, source slots and timestamps. All snapshots set execution eligibility false; private actions returned HTTP 503 |
 | Production build | `npm run build` passed after all application review fixes: frontend TypeScript/Vite and compiled Node service. The wallet bundle produces a size advisory, with no build error |
-| Dependency advisories | `npm audit --json`: zero known advisories in the final lockfile |
+| Dependency installation and advisories | A clean `npm ci` installed 334 packages after the hosting lockfile correction; `npm ls` reported no invalid dependencies and `npm audit --json` returned zero known advisories. The rpc-websockets CommonJS load passed with experimental require-module support disabled |
 | Program logic and client checks | 12 locked Rust tests and 8 independent transaction/client checks passed |
 | Program bytecode | Clean SBF build with no stack-frame diagnostics; SHA-256 `f29b7ed413790829893c0e7662e79157d1d07f3bfdeb3fc16107ee76f25b7873` |
 | Actual owner controls | The built SBF passed offline runtime checks for bootstrap authority, unauthorized actions, pause/withdraw/revoke, close/reinitialize nonce persistence and independent recovery |
@@ -25,6 +26,10 @@ The fork fixtures deliberately create a price difference through **local** swaps
 
 Production fee accounting uses the confirmed RPC receipt's `meta.fee` and verifies balance conservation. A Surfpool priority-fee discrepancy is handled only on `localnet`; the workaround cannot override production receipt fees.
 
+## Hosted preview
+
+[Preview deployment](https://stocklana-b9uo6cd8p-rafaeitahir-5792s-projects.vercel.app), identifier `dpl_Eju2bY2NaceWgNv59exhUXpXPS95`, passed signed-out checks on 15 October 2026. This preview confirms public market serving and configuration gates, not the persistent account service or financial workflows. Production deployment and the canonical public alias still require verification. Railway has not been deployed.
+
 ## Engineering review
 
 A separate implementation agent reviewed custody, signing, replay, accounting and owner-exit paths. Six concrete issues were corrected: pre-created ATA initialization, nonce/cooldown reset on vault recreation, loss of email verification, unknown imported signatures blocking leases, production HTTP sessions, and production fee authority. Regression checks accompany the fixes. This is an engineering review, **not a formal external audit**. A founder-designated independent engineer must review the final deployment and canary before admitting mainnet users.
@@ -33,11 +38,13 @@ Hard capital/profit/cooldown/daily-cycle/expiry guards reside on chain. Any owne
 
 ## Gates still open
 
-- Founder wallet, initial invitees, Railway/Supabase/Helius/Resend accounts and an owned, DNS-verifiable email domain.
+- Founder wallet, initial invitees, usable Railway/Supabase/Helius/Resend configuration and an owned, DNS-verifiable email domain.
 - Real hosted Postgres/TLS connectivity, actual email verification/delivery/webhooks, Railway volume/backup restoration and provider usage limits.
 - Founder-owned program address and deployment authority; rebuilding for that address, publishing and verifying the deployed ProgramData hash and authority. The development artifact above is not a production deployment identity.
 - Final deployment review, issuer eligibility for intended xStock users, asset-specific activation checks and a founder-approved small mainnet canary.
 - Actual wallet-driven desktop/mobile funding → authorization → execution → accounting → pause/withdraw/refund checks against the deployed service. API/SVM tests and disconnected browser inspection do not substitute for those checks.
-- Verified Railway URL and public-link cutover. The Vercel deployment is retained until the replacement works.
+- Verified promotion of the Vercel public workspace; verified Railway URL and persistent-service public-link cutover. Existing production remains available until each replacement is verified.
 
 Keep `PROGRAM_VERIFIED=false`, `MAINNET_CANARY_VERIFIED=false`, `KEEPER_ENABLED=false` and `OPERATOR_KILL_SWITCH=true` until the documented evidence exists. [Setup instructions](BETA-SETUP.md) and [program reproduction details](../onchain/VERIFICATION.md) describe the remaining steps. No external users, real fills or real email deliveries are claimed.
+
+The Vercel adapter has no database, fee-wallet signer, transaction builder or keeper. All market snapshots set `executionEligible=false`; a price gap is observation data and cannot activate trading. Its rate and credit counters are instance-local rather than a durable monthly limit. Persistent accounting and provider-budget controls belong to the Railway service.

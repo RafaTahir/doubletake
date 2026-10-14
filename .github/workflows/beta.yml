@@ -20,6 +20,7 @@ jobs:
       - run: npm test
       - run: node --import tsx --test onchain/tests/program-client.test.ts
       - run: npm run build
+      - run: npm run test:runtime
       - run: npm audit --audit-level=moderate
   program-unit:
     runs-on: ubuntu-latest

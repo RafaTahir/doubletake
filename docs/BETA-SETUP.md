@@ -15,6 +15,16 @@ Review current [Railway plans](https://docs.railway.com/pricing/plans), [usage l
 
 ## Deploy with funding disabled
 
+### Existing Vercel workspace
+
+The repository includes a public-workspace adapter for the existing `doubletake-app.vercel.app` project. It serves the frontend, `/api/config`, `/api/auth/session` and `/api/markets` using public Solana RPC. Its configuration always disables funding and automation and has no program identity. Every account, owner-action, fee, execution and RPC-proxy request returns an explicit configuration-required error. No database, fee-wallet key or keeper is loaded by this deployment.
+
+`vercel.json` routes API requests through `api/public-workspace.ts`; `.vercelignore` excludes the earlier research endpoints, private environment files, local state and program/keypair artifacts. Public snapshots retain source timestamps, deduplicate concurrent work and cache for at most five seconds. Public RPC can throttle or fail; the response then identifies unavailable data. Per-instance rate/credit counters reset when instances restart and are not a durable hosting-wide budget control.
+
+Verify the preview's configuration, real market responses, mobile navigation and disabled actions before promotion. The Vercel project retains its historical `stocklana` project name and deployment identifiers. Manual deployment is supported; automatic Git deployments remain disabled for `codex/product-beta`. Preview deployment `dpl_Eju2bY2NaceWgNv59exhUXpXPS95` passed signed-out API checks on 15 October 2026; production promotion remains pending. See [release evidence](RELEASE-STATUS.md) for its verified scope.
+
+### Persistent Railway service
+
 1. Deploy this branch to Railway with one replica. Set `APP_ORIGIN` to its generated HTTPS origin.
 2. Set `DATABASE_URL`, a random `SESSION_SECRET` of at least 32 characters and distinct 32-byte hex keys for `FEE_ENCRYPTION_KEY` and `BACKUP_ENCRYPTION_KEY`. Store recovery copies securely with the founder. Losing the fee key can prevent refunds. Never paste secrets in chat.
 3. Mount persistent storage (for example `/data`) and set `BACKUP_DIRECTORY=/data/backups`. Funding requires a successful encrypted financial snapshot. Test restoration into a separate database before launch.
@@ -64,7 +74,7 @@ Production migration requires the explicit admin URL; its optional CA falls back
 
 Make the verified Railway URL canonical, update real public links and retire Vercel from active use only after end-to-end checks. Preserve deployment history.
 
-This branch needs the persistent Node service. `vercel.json` disables automatic Vercel deployment for `codex/product-beta` using [Vercel's branch configuration](https://vercel.com/docs/project-configuration/git-configuration); it does not change the existing production deployment. Review the cutover before merging.
+Account services, funding, accounting, refunds, email and automation require the persistent Node service. The Vercel adapter is a public-market workspace while those prerequisites are completed. `vercel.json` disables automatic Vercel deployment for `codex/product-beta` using [Vercel's branch configuration](https://vercel.com/docs/project-configuration/git-configuration); manual promotion changes production only after verification. Review the persistent-service cutover before merging.
 
 Keep automatic paid upgrades off. `OPERATOR_KILL_SWITCH=true` stops new execution; `SERVICE_BUDGET_EXHAUSTED=true` pauses automation when budget is unavailable. RPC checks queue within rate limits, back off on provider throttling and stop at the request budget. Provider free-tier quotas remain the final boundary. Reconciliation/refunds continue with keeper disabled. Restart with the same database/keys; never delete a pending intent simply to retry it.
 

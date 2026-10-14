@@ -1,5 +1,17 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "regions": ["sin1"],
+  "functions": {
+    "api/public-workspace.ts": { "maxDuration": 30 }
+  },
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "/api/public-workspace?route=:path*"
+    }
+  ],
   "git": {
     "deploymentEnabled": {
       "codex/product-beta": false

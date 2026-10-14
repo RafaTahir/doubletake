@@ -331,16 +331,20 @@ export class RaydiumMarkets implements MarketGateway {
   constructor(
     private endpoint: string,
     connection?: Connection,
+    explicitBudget?: RpcBudget,
   ) {
-    const file =
-      process.env.RPC_USAGE_FILE ||
-      (process.env.BACKUP_DIRECTORY
-        ? path.join(process.env.BACKUP_DIRECTORY, ".rpc-usage.json")
-        : undefined);
-    const cap = Number(process.env.RPC_MONTHLY_CREDIT_CAP ?? 900_000);
-    if (!Number.isSafeInteger(cap) || cap < 1000 || cap > 900_000)
-      throw Error("RPC monthly credit cap must be 1000–900000");
-    const budget = new RpcBudget(cap, file);
+    let budget = explicitBudget;
+    if (!budget) {
+      const file =
+        process.env.RPC_USAGE_FILE ||
+        (process.env.BACKUP_DIRECTORY
+          ? path.join(process.env.BACKUP_DIRECTORY, ".rpc-usage.json")
+          : undefined);
+      const cap = Number(process.env.RPC_MONTHLY_CREDIT_CAP ?? 900_000);
+      if (!Number.isSafeInteger(cap) || cap < 1000 || cap > 900_000)
+        throw Error("RPC monthly credit cap must be 1000–900000");
+      budget = new RpcBudget(cap, file);
+    }
     this.rpcFetch = budgetedFetch(budget);
     this.connection = connection ?? budgetConnection(endpoint, budget);
   }
