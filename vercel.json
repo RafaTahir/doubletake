@@ -3,6 +3,13 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "regions": ["sin1"],
+  "redirects": [
+    {
+      "source": "/:path*",
+      "destination": "https://doubletake-production-446f.up.railway.app/:path*",
+      "permanent": false
+    }
+  ],
   "functions": {
     "api/public-workspace.ts": { "maxDuration": 30 }
   },

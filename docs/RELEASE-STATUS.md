@@ -1,6 +1,6 @@
 # Beta release evidence
 
-Verification date: 15 October 2026. This branch implements the application, persistent API, keeper, prepaid-fee accounting and guarded Solana program. Funding and automation are disabled by default. A separate Vercel adapter exposes the current workspace and public market observations while persistent services await setup. The updated workspace is deployed at [doubletake-app.vercel.app](https://doubletake-app.vercel.app/) and passed signed-out production API and browser checks. No mainnet execution is recorded.
+Verification date: 15 October 2026. This branch implements the application, persistent API, keeper, prepaid-fee accounting and guarded Solana program. The canonical public workspace and Node service are deployed at [DoubleTake on Railway](https://doubletake-production-446f.up.railway.app/). Signed-out health, configuration, session and seven live market responses passed. Postgres, email, financial keys, invitations and program identity remain unconfigured, so funding and automation are disabled. No mainnet execution is recorded.
 
 ## Verified locally
 
@@ -27,11 +27,28 @@ The fork fixtures deliberately create a price difference through **local** swaps
 
 Production fee accounting uses the confirmed RPC receipt's `meta.fee` and verifies balance conservation. A Surfpool priority-fee discrepancy is handled only on `localnet`; the workaround cannot override production receipt fees.
 
-## Hosted production
+## Hosted Railway service
 
-[DoubleTake](https://doubletake-app.vercel.app/) points to production deployment `dpl_6ZjRhHFdzspPzpYt3sfiE43tMQGW`, [deployment URL](https://stocklana-kkgy2ga3i-rafaeitahir-5792s-projects.vercel.app), built from clean commit `a6696721a8d536d94f98ef97aaef38297e8b06d0`. Signed-out API checks and browser inspection confirmed the current workspace and seven real market observations on 15 October 2026. Configuration keeps funding and automation disabled. This verifies public market serving, not the persistent account service or financial workflows.
+The canonical workspace is [doubletake-production-446f.up.railway.app](https://doubletake-production-446f.up.railway.app/). Actual deployment `69213239-68e1-4317-81aa-4cc605bf5255` was built from commit `bf3d0c670a5519f9e7ad591d04f254aa4c549875`, with Docker image identifier `72b6b12891a2a6872a3493a18fa0f470bb5c23041c1a9dd35e7e28a15ae5da45`.
 
-The earlier [verified preview](https://stocklana-b9uo6cd8p-rafaeitahir-5792s-projects.vercel.app), identifier `dpl_Eju2bY2NaceWgNv59exhUXpXPS95`, remains part of the deployment history. The historical Vercel project name is `stocklana`; its identifiers were preserved. Railway's account is accessible, but repository access through its GitHub application is missing. Railway has not been deployed and no canonical-host migration is claimed.
+| Resource | Actual identifier or setting |
+|---|---|
+| Project | `DoubleTake`, `4b286573-c40f-4a25-8441-b9eb36ad5dab` |
+| Environment | `6e5176b3-7a10-4472-bda0-d5611e362e15` |
+| Service | `730bef0b-034e-4331-a998-662e04da69eb` |
+| Persistent volume | `13d9d76b-eab5-47e9-96fe-78d13c4f9234`, mounted at `/data` |
+| RPC usage counter | `/data/backups/.rpc-usage.json` |
+| Runtime/deployment | Pinned Node 22 Docker build, one replica, `/healthz`, at most three failure restarts, CI waiting enabled |
+| Active configuration | Railway service dashboard; `railway.toml` is not active for this new project |
+| Trial boundaries | 30-day trial, US$5 credit cap; plan maxima 2 vCPU, 1 GB memory and 1 GB disk. Custom CPU/memory limits could not be set with the disabled trial sliders |
+
+Signed-out `/healthz` returned HTTP 200 with `ok`; `/health/ready` returned HTTP 200 with `configuration-required` and `accountsReady=false`. `/api/config` returned HTTP 200 with funding/automation false and no program identity. `/api/auth/session` returned HTTP 200 with no user. `/api/markets` returned HTTP 200 with all seven markets available from actual Raydium state. JUP quoting was blocked by depth checks, and all execution eligibility values remained false.
+
+This confirms cloud process/public-market availability, not complete account or financial workflows. Database, email, fee/backup encryption keys, program identity and invitees are unset; encrypted financial backup/restoration is unverified. The trial cap is not the intended paid US$20 monthly hard limit: that control was unavailable in the trial dashboard and remains required before any founder-approved billing upgrade. No paid upgrade or new account terms were accepted.
+
+## Vercel deployment history
+
+The earlier [Vercel workspace](https://stocklana-kkgy2ga3i-rafaeitahir-5792s-projects.vercel.app), deployment `dpl_6ZjRhHFdzspPzpYt3sfiE43tMQGW`, was built from clean commit `a6696721a8d536d94f98ef97aaef38297e8b06d0`. Signed-out production API and browser checks verified the workspace and seven real market observations. The [verified preview](https://stocklana-b9uo6cd8p-rafaeitahir-5792s-projects.vercel.app), deployment `dpl_Eju2bY2NaceWgNv59exhUXpXPS95`, also remains part of the history. The historical project name `stocklana` and real deployment identifiers were preserved. A redirect from [doubletake-app.vercel.app](https://doubletake-app.vercel.app/) to Railway is pending verification; this revision does not claim it is live.
 
 ## Engineering review
 
@@ -41,13 +58,13 @@ Hard capital/profit/cooldown/daily-cycle/expiry guards reside on chain. Any owne
 
 ## Gates still open
 
-- Founder wallet, initial invitees, Railway GitHub repository access, usable Supabase/Helius/Resend configuration and an owned, DNS-verifiable email domain.
-- Real hosted Postgres/TLS connectivity, actual email verification/delivery/webhooks, Railway volume/backup restoration and provider usage limits.
+- Founder wallet, initial invitees, usable Supabase/Helius/Resend configuration and an owned, DNS-verifiable email domain.
+- Real hosted Postgres/TLS connectivity, actual email verification/delivery/webhooks, financial encryption keys, encrypted backup/restoration and provider usage limits. The existing Railway volume alone does not satisfy these gates.
 - Founder-owned program address and deployment authority; rebuilding for that address, publishing and verifying the deployed ProgramData hash and authority. The development artifact above is not a production deployment identity.
 - Final deployment review, issuer eligibility for intended xStock users, asset-specific activation checks and a founder-approved small mainnet canary.
 - Actual wallet-driven desktop/mobile funding → authorization → execution → accounting → pause/withdraw/refund checks against the deployed service. API/SVM tests and disconnected browser inspection do not substitute for those checks.
-- Verified Railway deployment URL and persistent-service public-link cutover. The current Vercel production deployment remains the public workspace until that replacement is verified.
+- Verified Vercel redirect to the canonical Railway workspace, plus the US$20 paid monthly hard usage limit before any approved billing upgrade.
 
 Keep `PROGRAM_VERIFIED=false`, `MAINNET_CANARY_VERIFIED=false`, `KEEPER_ENABLED=false` and `OPERATOR_KILL_SWITCH=true` until the documented evidence exists. [Setup instructions](BETA-SETUP.md) and [program reproduction details](../onchain/VERIFICATION.md) describe the remaining steps. No external users, real fills or real email deliveries are claimed.
 
-The Vercel adapter has no database, fee-wallet signer, transaction builder or keeper. All market snapshots set `executionEligible=false`; a price gap is observation data and cannot activate trading. Its rate and credit counters are instance-local rather than a durable monthly limit. Persistent accounting and provider-budget controls belong to the Railway service.
+The retained Vercel adapter has no database, fee-wallet signer, transaction builder or keeper; its rate and credit counters are instance-local. Railway now runs the Node service with persistent RPC usage accounting, while the missing financial prerequisites keep every market's `executionEligible=false`. A price gap is observation data and cannot activate trading.

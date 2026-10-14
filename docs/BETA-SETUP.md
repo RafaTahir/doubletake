@@ -4,32 +4,34 @@ Real funding, automation and verified email require the setup below. The founder
 
 | Service | Purpose | Setup |
 |---|---|---|
-| Railway | Runs app, API and keeper | Account is accessible; grant the Railway GitHub application repository access, deploy this branch with Dockerfile, mount persistent volume, set US$20 hard monthly usage ceiling |
+| Railway | Runs app, API and keeper | Public Node service is deployed with one replica and a `/data` volume; complete financial prerequisites and set the US$20 hard limit before a paid upgrade |
 | Supabase | Persistent Postgres | Create free project, obtain server connection URL with `sslmode=verify-full`, configure trusted CA if required |
 | Helius | Reliable Solana RPC | Create free-tier mainnet key, put private endpoint in `SOLANA_RPC_URL`, keep paid upgrades off |
 | Resend | Verification/transaction email | Create free account, verify your own domain through DNS, create sending key and webhook secret |
 
 `doubletake-app.vercel.app` is a hosting subdomain. It cannot verify ownership of `vercel.app` for email. Resend requires [a domain you own](https://resend.com/docs/dashboard/domains/introduction). Domain purchase is a separate founder action/expense. The web app can initially use Railway's generated HTTPS address while email awaits DNS verification.
 
-Review current [Railway plans](https://docs.railway.com/pricing/plans), [usage limits](https://docs.railway.com/reference/usage-limits), [Supabase](https://supabase.com/pricing), [Helius](https://www.helius.dev/pricing) and [Resend](https://resend.com/pricing). Set Railway's ceiling in its dashboard; `railway.toml` does not enforce billing limits. Reserve US$5 of the US$25 service budget. A hard hosting ceiling can stop the service; independent owner withdrawals remain available through direct RPC.
+Review current [Railway plans](https://docs.railway.com/pricing/plans), [usage limits](https://docs.railway.com/reference/usage-limits), [Supabase](https://supabase.com/pricing), [Helius](https://www.helius.dev/pricing) and [Resend](https://resend.com/pricing). The current Railway workspace is on a 30-day trial with a US$5 credit cap. No paid upgrade or new terms were accepted. The trial dashboard does not expose a configurable US$20 monthly hard limit; this has not been set. Before a founder-approved billing upgrade, set that limit and reserve US$5 of the US$25 service budget. `railway.toml` cannot enforce billing limits. A hard hosting ceiling can stop the service; independent owner withdrawals remain available through direct RPC once the program is deployed.
 
 ## Deploy with funding disabled
 
-### Existing Vercel workspace
+### Railway public workspace
 
-The repository includes a public-workspace adapter for the existing `doubletake-app.vercel.app` project. It serves the frontend, `/api/config`, `/api/auth/session` and `/api/markets` using public Solana RPC. Its configuration always disables funding and automation and has no program identity. Every account, owner-action, fee, execution and RPC-proxy request returns an explicit configuration-required error. No database, fee-wallet key or keeper is loaded by this deployment.
+The canonical workspace is [doubletake-production-446f.up.railway.app](https://doubletake-production-446f.up.railway.app/). Railway runs the repository's pinned Node 22 Docker image with one replica, `/healthz` checks and at most three failure restarts. Build/deployment settings were configured in Railway's service dashboard; its current new-project interface deprecates the config-file option, so the checked-in `railway.toml` is not the active configuration for this deployment. CI waiting is enabled.
 
-`vercel.json` routes API requests through `api/public-workspace.ts`; `.vercelignore` excludes the earlier research endpoints, private environment files, local state and program/keypair artifacts. Public snapshots retain source timestamps, deduplicate concurrent work and cache for at most five seconds. Public RPC can throttle or fail; the response then identifies unavailable data. Per-instance rate/credit counters reset when instances restart and are not a durable hosting-wide budget control.
+The 1 GB persistent volume is mounted at `/data`; the public RPC usage counter uses `/data/backups/.rpc-usage.json`. The trial plan advertises maxima of 2 vCPU and 1 GB memory, but its CPU/memory sliders are disabled: lower custom resource limits were not set. These plan maxima and the trial credit cap are not an ongoing US$20 paid billing limit.
 
-Verify the preview's configuration, real market responses, mobile navigation and disabled actions before promotion. The Vercel project retains its historical `stocklana` project name and deployment identifiers. Manual deployment is supported; automatic Git deployments remain disabled for `codex/product-beta`. Production deployment `dpl_6ZjRhHFdzspPzpYt3sfiE43tMQGW`, built from commit `a6696721a8d536d94f98ef97aaef38297e8b06d0`, now serves [doubletake-app.vercel.app](https://doubletake-app.vercel.app/). Signed-out API and browser checks passed on 15 October 2026. See [release evidence](RELEASE-STATUS.md) for the verified scope; account and financial services remain disabled.
+Signed-out checks returned healthy process status, a configuration-required readiness state with `accountsReady=false`, anonymous session status and all seven real market observations. Funding and automation are false and the program identity is null. Postgres, email, fee/backup encryption keys, a verified program and invitees remain unset. Financial backup and restore are unverified. See [release evidence](RELEASE-STATUS.md) for identifiers and the tested scope.
 
-### Persistent Railway service
+### Earlier Vercel deployment
 
-The Railway account is accessible, but the Railway GitHub application does not yet have access to this repository. Complete that repository connection before deployment. No persistent Railway service or canonical URL migration is recorded yet.
+The historical Vercel project is named `stocklana`. Its public-market-only adapter and prior deployment identifiers remain in source and release evidence. That adapter has no database, fee-wallet signer or keeper; its request and RPC counters are per instance rather than durable monthly controls. A redirect from `doubletake-app.vercel.app` to Railway is being prepared; do not claim it is live until the HTTP response and destination are verified.
 
-1. Deploy this branch to Railway with one replica. Set `APP_ORIGIN` to its generated HTTPS origin.
+### Complete persistent account services
+
+1. Retain the existing single-replica Railway service and set `APP_ORIGIN` to its canonical HTTPS origin. Confirm the service's dashboard settings after configuration changes.
 2. Set `DATABASE_URL`, a random `SESSION_SECRET` of at least 32 characters and distinct 32-byte hex keys for `FEE_ENCRYPTION_KEY` and `BACKUP_ENCRYPTION_KEY`. Store recovery copies securely with the founder. Losing the fee key can prevent refunds. Never paste secrets in chat.
-3. Mount persistent storage (for example `/data`) and set `BACKUP_DIRECTORY=/data/backups`. Funding requires a successful encrypted financial snapshot. Test restoration into a separate database before launch.
+3. Retain the existing `/data` volume and `BACKUP_DIRECTORY=/data/backups`. Funding requires a successful encrypted financial snapshot, not just a mounted directory or RPC usage file. Test restoration into a separate database before launch.
 4. Set mainnet cluster and private Helius RPC. Set Resend key, verified `EMAIL_FROM` and webhook secret. Configure signed delivery webhooks using the API's notification-webhook route.
 5. Run `node build/server/migrate.js` in a one-off process with the separate admin `DATABASE_MIGRATION_URL` (and `DATABASE_MIGRATION_CA_CERT` if needed). Create/grant the dedicated runtime role below, then remove migration-admin credentials from the running service environment. Verify `/healthz`, `/health/ready`, market data, authentication, email and backup restoration.
 6. Keep `PROGRAM_VERIFIED=false`, `MAINNET_CANARY_VERIFIED=false`, `KEEPER_ENABLED=false`, `OPERATOR_KILL_SWITCH=true`. Hosting the workspace does not authorize capital movement.
@@ -74,9 +76,9 @@ Production migration requires the explicit admin URL; its optional CA falls back
 
 ## Cutover and operations
 
-Make the verified Railway URL canonical, update real public links and retire Vercel from active use only after end-to-end checks. Preserve deployment history.
+Railway is the canonical public workspace. Verify the planned Vercel redirect and update public links while preserving deployment history. Hosting checks do not establish that financial workflows are complete.
 
-Account services, funding, accounting, refunds, email and automation require the persistent Node service. The Vercel adapter is a public-market workspace while those prerequisites are completed. `vercel.json` disables automatic Vercel deployment for `codex/product-beta` using [Vercel's branch configuration](https://vercel.com/docs/project-configuration/git-configuration); manual promotion changes production only after verification. Review the persistent-service cutover before merging.
+Account services, funding, accounting, refunds, email and automation require the remaining Node-service prerequisites. The existing Vercel configuration disables automatic deployment for `codex/product-beta` using [Vercel's branch configuration](https://vercel.com/docs/project-configuration/git-configuration); manual promotion changes production only after verification. Review host and deployment settings before merging.
 
 Keep automatic paid upgrades off. `OPERATOR_KILL_SWITCH=true` stops new execution; `SERVICE_BUDGET_EXHAUSTED=true` pauses automation when budget is unavailable. RPC checks queue within rate limits, back off on provider throttling and stop at the request budget. Provider free-tier quotas remain the final boundary. Reconciliation/refunds continue with keeper disabled. Restart with the same database/keys; never delete a pending intent simply to retry it.
 

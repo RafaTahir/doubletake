@@ -906,7 +906,7 @@ export function App() {
           fresh pool state and funded execution fees.
         </span>
         <a
-          href="https://github.com/RafaTahir/doubletake"
+          href="https://github.com/RafaTahir/doubletake/tree/codex/product-beta"
           target="_blank"
           rel="noopener noreferrer"
         >
