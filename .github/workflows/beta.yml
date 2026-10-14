@@ -1,0 +1,47 @@
+name: Beta verification
+on:
+  push:
+    branches: [main, 'codex/**']
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  application:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '22.22.2'
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: node --import tsx --test onchain/tests/program-client.test.ts
+      - run: npm run build
+      - run: npm run test:runtime
+      - run: npm audit --audit-level=moderate
+  program-unit:
+    runs-on: ubuntu-latest
+    env:
+      NO_DNA: '1'
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install 1.97.1 --profile minimal
+      - run: cargo +1.97.1 test --manifest-path onchain/Cargo.toml --locked
+  container:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - run: docker build --tag doubletake-beta .
+      - name: Verify production startup and disabled funding gates
+        run: |
+          trap 'status=$?; if [ "$status" -ne 0 ]; then docker logs doubletake-smoke; fi; docker rm -f doubletake-smoke >/dev/null 2>&1 || true' EXIT
+          docker run --detach --name doubletake-smoke --publish 127.0.0.1:3000:3000 --env APP_ORIGIN=https://doubletake.example doubletake-beta
+          curl --fail --retry 15 --retry-all-errors --retry-delay 1 --connect-timeout 1 --max-time 2 http://127.0.0.1:3000/healthz
+          docker exec doubletake-smoke node --input-type=module -e 'const response = await fetch("http://127.0.0.1:3000/api/config"); if (!response.ok) throw Error("Production configuration route failed"); const config = await response.json(); if (config.fundingEnabled || config.automationEnabled) throw Error("Unconfigured production enabled capital movement"); console.log("Production runtime healthy; funding and automation disabled");'

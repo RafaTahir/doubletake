@@ -1,0 +1,39 @@
+[package]
+name = "doubletake"
+version = "0.1.0"
+edition = "2021"
+description = "Owner controlled atomic arbitrage vaults"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "doubletake"
+
+[features]
+default = []
+no-entrypoint = []
+cpi = ["no-entrypoint"]
+no-idl = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build", "raydium-clmm/idl-build"]
+
+[dependencies]
+anchor-lang = { version = "=1.0.2", features = ["init-if-needed"] }
+anchor-attribute-access-control = "=1.0.2"
+anchor-attribute-account = "=1.0.2"
+anchor-attribute-constant = "=1.0.2"
+anchor-attribute-error = "=1.0.2"
+anchor-attribute-event = "=1.0.2"
+anchor-attribute-program = "=1.0.2"
+anchor-derive-accounts = "=1.0.2"
+anchor-derive-serde = "=1.0.2"
+anchor-derive-space = "=1.0.2"
+anchor-spl = { version = "=1.0.2", features = ["token", "token_2022", "associated_token", "memo"] }
+raydium-clmm = { git = "https://github.com/raydium-io/raydium-clmm", rev = "ed1eb41519d5355755f7df52b43fa9610938b60b", features = ["cpi"] }
+sha2 = "=0.10.9"
+
+[build-dependencies]
+# Pin parser code on the host only; never link compiler machinery into the SBF program.
+anchor-syn = "=1.0.2"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("anchor-debug", "custom-heap", "custom-panic"))', 'cfg(target_os, values("solana"))'] }

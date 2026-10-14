@@ -1,110 +1,941 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { FileCard, Group, Closing, Callout } from './ui';
-import assets from './data/assets.json';
-import './style.css';
-import './fonts.css';
-import MechanicalObservatory from './components/MechanicalObservatory';
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import "./style.css";
+import "./fonts.css";
+import { WalletShell, WalletConnect, useWallet } from "./wallet/Wallet";
+import {
+  product,
+  errorMessage,
+  toBase64,
+  fromBase64,
+  ProductError,
+} from "./services/product";
+import type {
+  RuntimeConfig,
+  MarketSnapshot,
+  SessionUser,
+  Strategy,
+  StrategyPolicy,
+  OwnerAction,
+  TransactionIntent,
+  ExecutionReceipt,
+  FeeCredit,
+  NotificationPreferences,
+  Portfolio,
+} from "./services/product";
+import {
+  validateOwnerTransaction,
+  prepareIndependentOwnerAction,
+  DEVELOPMENT_PROGRAM_ID,
+} from "../shared/program.ts";
+import { Markets } from "./components/product/Markets";
+import { Strategies } from "./components/product/Strategies";
+import { Activity } from "./components/product/Activity";
+import { Settings } from "./components/product/Settings";
+import { TransactionReview } from "./components/product/TransactionReview";
+import { Recovery, publicRpc } from "./components/product/Recovery";
+import { Connection } from "@solana/web3.js";
+import {
+  decodeOwnerTransaction,
+  validateFeeFunding,
+  verifyWalletReturnedMessage,
+  signedTransactionSignature,
+} from "./components/product/transactions";
+import {
+  Banner,
+  Heading,
+  Loading,
+  ExplorerLink,
+} from "./components/product/Common";
+import {
+  pendingOwnerActions,
+  queueOwnerAction,
+  removePendingSignatures,
+  markPendingImported,
+} from "./components/product/pending";
+import { shortAddress } from "./components/product/format";
+import { BETA_LIMITS } from "../shared/registry.ts";
+import { validateSignInChallenge } from "./components/product/auth";
 
-import {Holding,Price,Point,DEMO,money,time,fetchPrice,walletHoldings,validSolanaAddress,markExplain} from './services/market';
-import {getQuote,Quote} from './services/jupiter';
-import {getRoundTrip,screen,quoteExpired,RoundTrip,Route} from './services/arb';
-import {WalletShell,WalletConnect,useWallet} from './wallet/Wallet';
-const POLL_MS=45_000;
-const tokenAmount=(amount:number)=>amount.toLocaleString('en-US',{maximumFractionDigits:8});
-const signed=(amount:number,digits=4)=>`${amount>0?'+':''}${amount.toFixed(digits)}`;
-const quoteTime=(at:number)=>new Date(at).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',second:'2-digit',timeZoneName:'short'});
-function RouteDetails({label,route,at,slot}:{label:string;route:Route[];at:number;slot?:number}){
- return <div className="route-details"><small><b>{label}</b> · {quoteTime(at)}{slot!==undefined?` · slot ${slot}`:''}</small><ul>{route.length?route.map((r,i)=><li key={`${r.pool}-${i}`}>{r.venue}{r.percent!==undefined?` (${r.percent}%)`:''}{r.pool?<a href={`https://explorer.solana.com/address/${encodeURIComponent(r.pool)}`} target="_blank" rel="noopener noreferrer" title={r.pool}>Pool {r.pool.slice(0,6)}…{r.pool.slice(-6)} ↗</a>:<span>Pool ID unavailable</span>}</li>):<li>Route details unavailable</li>}</ul></div>;
+type View = "markets" | "strategies" | "activity" | "settings";
+const views: View[] = ["markets", "strategies", "activity", "settings"];
+function viewFromLocation(): View {
+  const hash = window.location.hash.replace(/^#\/?/, "").toLowerCase();
+  return views.includes(hash as View) ? (hash as View) : "markets";
 }
-function Sparkline({points}:{points:Point[]}){
-  if(points.length<2)return <p className="trend-empty">A line appears after the next live check. Leave this page open to watch the gap.</p>;
-  const values=points.map(p=>p.gap),lo=Math.min(...values),hi=Math.max(...values),range=Math.max(hi-lo,.02);
-  const path=points.map((p,i)=>`${8+i*224/(points.length-1)},${48-(p.gap-lo)/range*36}`).join(' ');
-  return <div className="trend-chart"><svg viewBox="0 0 240 56" role="img" aria-label={`Observed venue gap moved from ${values[0].toFixed(2)} to ${values[values.length-1].toFixed(2)} percent over ${points.length} checks`} preserveAspectRatio="none"><line x1="8" x2="232" y1="48" y2="48" stroke="var(--line)"/><polyline fill="none" stroke="var(--brass)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" points={path}/><circle cx="232" cy={path.split(' ').at(-1)?.split(',')[1]} r="3.5" fill="var(--brass)"/></svg><div className="trend-times"><span>{time(points[0].at)}</span><span>{time(points[points.length-1].at)}</span></div></div>;
+interface PreparedReview {
+  intent: TransactionIntent;
+  action?: OwnerAction;
+  amountRaw?: string;
+  policy?: StrategyPolicy;
+  independent?: boolean;
+  rpcEndpoint?: string;
 }
-function RoutePreview({mint,symbol,now}:{mint:string;symbol:string;now:number}){
- const [direction,setDirection]=useState<'buy'|'sell'>('buy');const [quote,setQuote]=useState<Quote>();const [loading,setLoading]=useState(false);const [error,setError]=useState('');
- async function load(next:'buy'|'sell'=direction){setDirection(next);setLoading(true);setError('');setQuote(undefined);try{setQuote(await getQuote(mint,next))}catch(e:any){setError(e.message||'Quote unavailable')}finally{setLoading(false)}}
- const expired=quote&&quoteExpired(quote.quotedAt,now);
- const unit=direction==='buy'?`${symbol} unscaled tokens`:'USDC';
- return <section className="act-on-it"><h4>Inspect a swap quote <small>Indicative Jupiter routes · read-only</small></h4><p>These routes can use any supported pools. No trade is prepared or signed.</p><div className="quote-actions"><button type="button" onClick={()=>load('buy')} disabled={loading} aria-busy={loading}>Quote 10 USDC → {symbol}</button><button type="button" onClick={()=>load('sell')} disabled={loading}>Quote 0.01 {symbol} → USDC</button></div><small className="unit-note">xStock quantities are unscaled token units. Wallet displays can differ after issuer adjustments.</small>{loading&&<p role="status">Fetching Jupiter route…</p>}{error&&<p className="card-error" role="status">{error}</p>}{quote&&<div className="quote-result" role="status">{expired?<strong>QUOTE EXPIRED · request a new quote</strong>:<><strong>{tokenAmount(quote.inputAmount)} {direction==='buy'?'USDC':`${symbol} unscaled tokens`} → about {tokenAmount(quote.outputAmount)} {unit}</strong><small>Price impact: {quote.priceImpactPct.toFixed(3)}% · Slippage setting: {quote.slippageBps/100}% · Minimum output threshold: {tokenAmount(quote.minOutputAmount)} {unit}</small><small>Quotes expire after 30 seconds. Route fees are included in output; network costs are excluded. No fill is guaranteed.</small></>}<RouteDetails label="Jupiter quote" route={quote.route} at={quote.quotedAt} slot={quote.contextSlot}/></div>}</section>
+function recoveryBuildConfig(): RuntimeConfig | null {
+  const selected = import.meta.env.VITE_SOLANA_CLUSTER || "mainnet-beta";
+  const cluster = ["mainnet-beta", "devnet", "localnet"].includes(selected)
+    ? (selected as RuntimeConfig["cluster"])
+    : "mainnet-beta";
+  const local =
+    cluster === "localnet" &&
+    import.meta.env.VITE_ALLOW_LOCALNET_PROGRAM === "true" &&
+    ["localhost", "127.0.0.1"].includes(window.location.hostname);
+  const programId =
+    import.meta.env.VITE_PROGRAM_ID || (local ? DEVELOPMENT_PROGRAM_ID : null);
+  return programId
+    ? {
+        cluster,
+        programId,
+        rpcEndpoint: "/api/rpc",
+        phase: "verification-required",
+        fundingEnabled: false,
+        automationEnabled: false,
+        upgradeAuthority: null,
+        limits: BETA_LIMITS,
+        readiness: {
+          ready: false,
+          reasons: [
+            "Service connection is pending. The build-pinned program remains available for independent owner recovery.",
+          ],
+        },
+      }
+    : null;
 }
-function Card({holding,price,points,refreshing,now}:{holding:Holding;price?:Price;points:Point[];refreshing:boolean;now:number}) {
- const [expanded,setExpanded]=useState(false);
- const [trip,setTrip]=useState<RoundTrip>();
- const [tripError,setTripError]=useState('');
- const [checkingTrip,setCheckingTrip]=useState(false);
- const a=assets.find(a=>a.symbol===holding.symbol)!;
- const diff=price?.second!==undefined&&price?.dex!==undefined?(price.dex/price.second-1)*100:undefined;
- const result=screen(trip,now);
- async function checkCosts(){setCheckingTrip(true);setTripError('');setTrip(undefined);try{setTrip(await getRoundTrip(a.mint))}catch(e:any){setTripError(e.message||'Live route check unavailable')}finally{setCheckingTrip(false)}}
- const statusLabel=!trip&&!tripError?'Awaiting inspection':{'unavailable':'Unavailable — try again','expired':'Quote expired — recheck routes','negative':'Negative quoted return','positive-unverified':'Positive quote — unverified','zero':'Zero quoted return before stress'}[result.status];
- const hasEstimate=result.status!=='unavailable'&&result.status!=='expired';
- return <article className={`asset-card ${expanded?'is-open':''}`} aria-label={`${a.symbol} market research`}>
-   <header className="asset-head"><div className="asset-identity"><span className="asset-seal" aria-hidden="true">{a.symbol.slice(0,1)}</span><div><h3 className="ticker">{a.symbol}</h3><span className="asset-name">{a.name}</span></div></div><span className="amount"><small>INSPECTED BALANCE</small>{tokenAmount(holding.amount)} <span>tokens</span></span></header>
-   <div className="instrument-panels">
-    <div className="observation-panel">
-     <div className="panel-heading"><span className="panel-number">I</span><h4>Observe the pools</h4><span className="panel-source">DEXSCREENER</span></div>
-     <div className="price-grid">{[{label:'A',value:price?.dex,pool:price?.pool},{label:'B',value:price?.second,pool:price?.secondPool}].map(p=><div key={p.label} className="price-readout"><span className="kicker">Pool {p.label} / token</span><strong>{!price?'Loading…':money(p.value)}</strong><small>{!price?'Fetching live pool':p.pool?`${p.pool.name} · ${p.pool.pair.slice(0,5)}…${p.pool.pair.slice(-4)}`:`No ${p.label==='B'?'second':'matching'} live USDC pool`}</small></div>)}</div>
-     <div className="gap"><div><span className="kicker">Observed pool gap</span><strong>{diff===undefined?'—':`${diff>=0?'+':''}${diff.toFixed(2)}%`}</strong></div><p>{markExplain(price)}</p></div>
-     {price?.stale&&<p className="card-error">Last good quote, stale. Refresh failed: {price.error}</p>}{price?.error&&!price.stale&&<p className="card-error">{price.error} Try Refresh prices.</p>}
-     <button className="detail-toggle" type="button" aria-expanded={expanded} aria-controls={`detail-${a.symbol}`} onClick={()=>setExpanded(v=>!v)}>{expanded?'Hide market detail':'Explore liquidity & gap trail'}<span aria-hidden="true">{expanded?'−':'+'}</span></button>
-     {expanded&&<div className="card-detail" id={`detail-${a.symbol}`}><div className="detail-title"><span className="kicker">Live gap trail</span><span>{points.length} {points.length===1?'check':'checks'} · 45-sec refresh</span></div><Sparkline points={points}/><div className="detail-facts"><div><span>Pool A liquidity</span><strong>{money(price?.pool?.liquidity)}</strong></div><div><span>Pool B liquidity</span><strong>{money(price?.secondPool?.liquidity)}</strong></div></div><p className="detail-disclaimer">Observed pool prices, not executable quotes. Trail records checks made while this page is open.</p>{price&&<small className="detail-checked">Source checked {time(price.checked)}{price.stale?' · stale':''}{refreshing?' · checking again…':''}</small>}</div>}
-     {price?.pool&&<div className="pool-links"><a href={price.pool.url} target="_blank" rel="noopener noreferrer" aria-label={`Inspect ${a.symbol} Pool A on DexScreener`}>Pool A ({price.pool.name}) ↗</a>{price.secondPool&&<a href={price.secondPool.url} target="_blank" rel="noopener noreferrer" aria-label={`Inspect ${a.symbol} Pool B on DexScreener`}>Pool B ({price.secondPool.name}) ↗</a>}</div>}
-     <div className="observation-note"><span aria-hidden="true">◇</span><p>A difference worth investigating.<br/><b>A price gap alone does not prove profit.</b></p></div>
-    </div>
-    <div className="route-panel">
-     <div className="panel-heading"><span className="panel-number">II</span><h4>Inspect the round trip</h4><span className="panel-source">JUPITER</span></div>
-     <div className={`arb-screen ${result.status}`} aria-busy={checkingTrip}>
-      <span className="kicker">Independent router quotes · {trip?.notionalUsdc??100} USDC</span>
-      <strong className="return-status" role="status">{checkingTrip?'Inspecting live routes…':statusLabel}</strong>
-      {hasEstimate&&trip?<><div className="pnl-readout"><span className="kicker">Quoted return</span><b>{signed(result.quotedPnlUsdc)} <small>USDC</small></b><span>{signed(result.quotedPnlPct)}% of starting USDC</span></div><p className="route-chain">{tokenAmount(trip.notionalUsdc)} USDC <span>→</span> {tokenAmount(trip.buyTokens)} {a.symbol} unscaled tokens <span>→</span> {tokenAmount(trip.sellUsdc)} USDC</p><details className="stress-detail"><summary>Stress scenario & assumptions</summary><p>Returned USDC minus starting USDC, before additional stress assumptions. Subtracting 1% of starting USDC ({tokenAmount(result.stressUsdc)} USDC) and a $0.02 network allowance gives a stressed P&amp;L of <b>{signed(result.stressedPnlUsdc)} USDC ({signed(result.stressedPnlPct)}%)</b>. These are assumptions, not measured costs.</p></details></>:<div className="idle-readout"><span aria-hidden="true">—.——</span><p>{result.status==='expired'?'Market conditions move. Request a fresh pair of quotes.':'Follow 100 USDC through a buy and a sell quote to inspect what comes back.'}</p></div>}
-      <button className="brass-button roundtrip-button" type="button" onClick={checkCosts} disabled={checkingTrip}>{checkingTrip?'Inspecting routes…':trip||tripError?'Recheck round trip ↻':'Check $100 round trip'}<span aria-hidden="true">{checkingTrip?'◌':'→'}</span></button>
-      {tripError&&<p className="card-error" role="status">{tripError}</p>}
-      <p className="quote-caveat">Separate from the pool gap. Unrestricted, sequential routes do not prove executable arbitrage. Quotes expire in 30 seconds.</p>
-      {trip&&<details className="route-evidence"><summary>Route evidence & timestamps</summary><RouteDetails label="Buy leg" route={trip.buyRoute} at={trip.buyQuotedAt} slot={trip.buyContextSlot}/><RouteDetails label="Sell leg" route={trip.sellRoute} at={trip.sellQuotedAt} slot={trip.sellContextSlot}/></details>}
-     </div>
-     <details className="swap-drawer"><summary>Inspect individual swap quotes <span aria-hidden="true">↗</span></summary><RoutePreview mint={a.mint} symbol={a.symbol} now={now}/></details>
-    </div>
-   </div>
- </article>
-}
-export function App(){
-  const [now,setNow]=useState(Date.now());const historyPairs=useRef<Record<string,string>>({});
-  useEffect(()=>{const update=()=>setNow(Date.now());const timer=window.setInterval(update,1_000);document.addEventListener('visibilitychange',update);return()=>{clearInterval(timer);document.removeEventListener('visibilitychange',update)}},[]);
-  const {publicKey}=useWallet();const [connectedBefore,setConnectedBefore]=useState(false);const [input,setInput]=useState('');const [address,setAddress]=useState('');const [mode,setMode]=useState<'demo'|'wallet'>('demo');const [holdings,setHoldings]=useState<Holding[]>(DEMO);const [loading,setLoading]=useState(false);const [message,setMessage]=useState('');const [prices,setPrices]=useState<Record<string,Price>>({});const [history,setHistory]=useState<Record<string,Point[]>>({});const [refreshing,setRefreshing]=useState(true);const [tick,setTick]=useState(0);const [lastChecked,setLastChecked]=useState<number>();const [selected,setSelected]=useState('ALL');
-  useEffect(()=>{const timer=window.setInterval(()=>{if(document.visibilityState==='visible')setTick(n=>n+1)},POLL_MS);const onVisible=()=>{if(document.visibilityState==='visible')setTick(n=>n+1)};document.addEventListener('visibilitychange',onVisible);return()=>{clearInterval(timer);document.removeEventListener('visibilitychange',onVisible)}},[]);
-  useEffect(()=>{let cancelled=false;setRefreshing(true);const relevant=assets.filter(a=>holdings.some(h=>h.symbol===a.symbol));if(!relevant.length){setRefreshing(false);return}Promise.all(relevant.map(async a=>[a.symbol,await fetchPrice(a)] as const)).then(rows=>{if(cancelled)return;const now=Date.now();setPrices(previous=>Object.fromEntries(rows.map(([symbol,p])=>{const prior=previous[symbol];return [symbol,p.error&&prior?.dex!==undefined?{...prior,stale:true,error:p.error}:p]})));setLastChecked(now);const priorPairKeys={...historyPairs.current};for(const [symbol,p] of rows){if(p.dex!==undefined&&p.second!==undefined)historyPairs.current[symbol]=`${p.pool?.pair}|${p.secondPool?.pair}`}setHistory(previous=>{const next={...previous};for(const [symbol,p] of rows){if(p.dex===undefined||p.second===undefined)continue;const point={at:now,gap:(p.dex/p.second-1)*100};const pairKey=`${p.pool?.pair}|${p.secondPool?.pair}`;const old=priorPairKeys[symbol]===pairKey?(next[symbol]||[]):[];next[symbol]=[...old,point].slice(-20)}return next});setRefreshing(false);setMessage(rows.every(([,p])=>p.error)?'Market quotes are temporarily unavailable. Try Refresh prices.':`Live check complete: ${rows.filter(([,p])=>p.dex!==undefined&&p.second!==undefined).length} of ${rows.length} comparisons available.`)}).catch(()=>{if(!cancelled){setRefreshing(false);setMessage('Market data did not answer. Try Refresh prices.')}});return()=>{cancelled=true}},[holdings,tick]);
-  const count=useMemo(()=>holdings.filter(h=>!prices[h.symbol]?.stale&&prices[h.symbol]?.dex!==undefined&&prices[h.symbol]?.second!==undefined).length,[prices,holdings]);
-  async function inspect(e:React.FormEvent){e.preventDefault();const value=input.trim();if(!validSolanaAddress(value)){setMessage('Enter a valid Solana public wallet address (base58, 32 bytes).');return}setLoading(true);setMessage('Checking SPL Token and Token-2022 balances on Solana mainnet…');try{const h=await walletHoldings(value);setAddress(value);setMode('wallet');setSelected('ALL');setHoldings(h);setPrices({});setHistory({});setLastChecked(undefined);setMessage(h.length?'Balances found. Fetching live pool quotes…':'No supported xStocks with a positive balance in this wallet. Try the example.')}catch{setMessage('Wallet lookup is temporarily unavailable. Your wallet was not changed; try again or use the example.')}finally{setLoading(false)}}
-  useEffect(()=>{if(!publicKey){if(connectedBefore){setConnectedBefore(false);setMode('demo');setHoldings(DEMO);setAddress('');setSelected('ALL');setMessage('Wallet disconnected. Example portfolio restored.')}return}setConnectedBefore(true);const value=publicKey.toBase58();setInput(value);let cancelled=false;setLoading(true);setMessage('Loading connected wallet xStock balances…');walletHoldings(value).then(h=>{if(cancelled)return;setAddress(value);setMode('wallet');setSelected('ALL');setHoldings(h);setPrices({});setHistory({});setLastChecked(undefined);setMessage(h.length?'Connected wallet balances loaded. Fetching live pool quotes…':'Connected wallet holds no supported xStocks. Use the example to explore quotes.');}).catch(()=>{if(!cancelled)setMessage('Connected wallet balance lookup is unavailable right now. You can retry with Inspect wallet or use the example.');}).finally(()=>{if(!cancelled)setLoading(false)});return()=>{cancelled=true}},[publicKey]);
-  function demo(){setMode('demo');setSelected('ALL');setAddress('');setHoldings(DEMO);setPrices({});setHistory({});setLastChecked(undefined);setMessage('Example balances loaded. Fetching live pool quotes…');setTick(n=>n+1)}
-  function selectAsset(symbol:string){setSelected(symbol);document.getElementById('compare')?.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth',block:'start'})}
-  function refresh(){if(refreshing)return;setMessage('Checking live pool quotes…');setTick(n=>n+1)}
-  return <FileCard>
-    <a className="skip-link" href="#choose">Skip to asset selection</a>
-    <nav className="masthead" aria-label="Main navigation"><a className="wordmark" href="#top" aria-label="DoubleTake home"><span className="brand-mark" aria-hidden="true"><i/><i/></span>DoubleTake<span className="brand-edition">THE PRICE OBSERVATORY</span></a><div className="masthead-links"><a href="#compare">Observatory</a><a href="#explain">Field notes</a><a href="https://github.com/RafaTahir/doubletake" target="_blank" rel="noopener noreferrer">GitHub ↗</a></div><span className="network-tag"><i/> SOLANA MAINNET</span></nav>
-    <header className="hero" id="top"><div className="hero-copy"><p className="eyebrow"><span/> INSTRUMENTS FOR THE INQUISITIVE TRADER</p><h1>See the gap.<br/><em>Question the profit.</em></h1><p className="hero-description">A second look at tokenized equities. Compare live pool prices, inspect route quotes, and uncover what a price gap really means.</p><div className="hero-actions"><a className="brass-button" href="#choose">Enter the observatory <span aria-hidden="true">↘</span></a><span>No wallet required.<br/>Read-only by design.</span></div><div className="hero-signature"><span aria-hidden="true">✧</span> ONE TOKEN. TWO POOLS. A CLOSER LOOK.</div></div><div className="hero-machine"><MechanicalObservatory/><span className="machine-caption">FIG. 01 — THE DOUBLETAKE COMPARATOR <span>ILLUSTRATION</span></span></div></header>
-    <div className="telemetry-bar"><span><i className={refreshing?'status-light checking':count?'status-light':'status-light unavailable'}/>{refreshing?'CHECKING MARKET FEEDS':count?'POOL DATA RECEIVED':'AWAITING MARKET DATA'}</span><span>DEXSCREENER <b>×</b> JUPITER</span><span>45s POOL REFRESH</span><span>30s QUOTE LIFETIME</span></div>
-    <div id="choose" className="anchor"/>
-    <section className="selection-section" aria-labelledby="selection-title">
-      <div className="section-heading"><div><span className="eyebrow">01 / SELECT YOUR INSTRUMENT</span><h2 id="selection-title">Choose a market.</h2></div><p>Live prices. Fictional example balances.<br/>A little curiosity is all you need.</p></div>
-      <div className="quick-buttons">{DEMO.map((h,i)=><button type="button" key={h.symbol} aria-pressed={selected===h.symbol&&mode==='demo'} onClick={()=>{if(mode!=='demo'){demo();setTimeout(()=>selectAsset(h.symbol),0)}else selectAsset(h.symbol)}}><span className="selector-number">0{i+1}</span><span><b>{h.symbol}</b><small>{assets.find(a=>a.symbol===h.symbol)?.name}</small></span><span className="selector-arrow" aria-hidden="true">↗</span></button>)}</div>
-      <div className="selection-footer"><div className="demo-row"><span>Prefer the wider view?</span><button type="button" onClick={demo}>Explore all three ↗</button></div><details className="optional-wallet"><summary>Inspect a wallet instead</summary><div className="wallet-content"><p className="lead">Connect a wallet or paste a public Solana address to inspect supported xStock balances. No transaction or wallet signature is requested.</p><WalletConnect/><form onSubmit={inspect} className="wallet-form"><label htmlFor="wallet">Public wallet address</label><div className="input-row"><input id="wallet" value={input} onChange={e=>setInput(e.target.value)} spellCheck={false} autoComplete="off" placeholder="Paste a Solana mainnet address"/><button type="submit" disabled={loading}>{loading?'Checking…':'Inspect wallet'}</button></div></form></div></details></div>
-      {message&&<p className="status" role="status">{message}</p>}
-    </section>
-    <div id="compare" className="anchor"/>
-    <section className="comparison-section" aria-labelledby="compare-title"><div className="section-heading"><div><span className="eyebrow">02 / THE OBSERVATION DECK</span><h2 id="compare-title">Look beneath the spread.</h2></div><p>Two independent observations.<br/>One better-informed perspective.</p></div>
-      <div className="section-bar"><div className="asset-filter" role="group" aria-label="Choose an asset to compare"><button type="button" aria-pressed={selected==='ALL'} onClick={()=>setSelected('ALL')}>All markets</button>{holdings.map(h=><button type="button" key={h.symbol} aria-pressed={selected===h.symbol} onClick={()=>setSelected(h.symbol)}>{h.symbol}</button>)}</div><button className="refresh-button" type="button" onClick={refresh} disabled={refreshing} aria-busy={refreshing}><span aria-hidden="true">↻</span> {refreshing?'Checking…':'Refresh prices'}</button></div>
-      <div className="market-context"><span className="mode">{mode==='demo'?'EXAMPLE BALANCES · LIVE MARKET DATA':'LIVE WALLET BALANCES'}</span><span>{lastChecked?`CHECKED ${time(lastChecked)}`:'FETCHING PRICES…'}</span></div>
-      {mode==='wallet'&&<p className="address">{address}</p>}
-      {holdings.length?<><div className="holdings">{holdings.filter(h=>selected==='ALL'||selected===h.symbol).map(h=><Card key={h.symbol} holding={h} price={prices[h.symbol]} points={history[h.symbol]||[]} refreshing={refreshing} now={now}/>)}</div><p className="freshness">{lastChecked?`${count}/${holdings.length} paired quotes${refreshing?' · Refreshing…':''}`:'Fetching live quotes…'} · Indicative prices, not executable fills. Pool refresh every 45 seconds.</p></>:<Callout title="Nothing to compare yet">This wallet has no positive balance among the five currently supported xStocks. Try the example or another public address.</Callout>}
-    </section>
-    <div id="explain" className="anchor"/>
-    <section className="field-notes" aria-labelledby="notes-title"><div className="notes-title"><span className="eyebrow">03 / FIELD NOTES</span><h2 id="notes-title">Every number<br/>has a story.</h2><span className="notes-emblem" aria-hidden="true">D<span>✧</span>T</span><p>A good instrument reveals its limits.</p></div><div className="reasons"><div><span>I.</span><div><h3>A price is not a fill.</h3><p>Pool prices are observations. Liquidity, fees, and trade size can change the output of an actual swap.</p></div></div><div><span>II.</span><div><h3>Two quotes. Two moments.</h3><p>The sell quote follows the buy quote and can use different pools. Even a positive quoted return remains unverified.</p></div></div><div><span>III.</span><div><h3>Assumptions stay visible.</h3><p>The separate stress scenario deducts 1% of the starting amount and a $0.02 network allowance. The observed pool gap is never added to the round-trip result.</p></div></div></div></section>
-    <details className="methodology"><summary>Open the technical ledger <span>Methodology, token units & sources +</span></summary><Group label="About the instruments"><p className="lead">Example holdings are fictional. DexScreener pool prices are live. We compare the two USDC pools with the highest reported USD liquidity above $1,000 for each supported xStock mint. The gap trail samples every 45 seconds while this page is open, is held in memory, and resets on reload or a pool-pair change.</p><p className="lead">Wallet inspection reads SPL Token and Token-2022 balances. Five mints are recognized: AAPLx, TSLAx, NVDAx, MSFTx and GOOGLx. Other assets are ignored. Connecting a wallet never signs a transaction.</p><p className="lead">Quoted P&amp;L is returned USDC minus starting USDC. Jupiter outputs include route fees and price impact; the 1% stress and $0.02 network allowances are separate assumptions. xStock quote amounts use eight decimals and are unscaled token units. Wallet displays can incorporate issuer adjustments. Pool prices are not US share prices, issuer values, redemption prices, or promises of a fill.</p><div className="source-links"><a href="https://docs.xstocks.fi/apis/openapi.md" target="_blank" rel="noopener noreferrer">xStocks registry ↗</a><a href="https://solana.com/docs/tokens/extensions/scaled-ui-amount/integration-guide" target="_blank" rel="noopener noreferrer">Token adjustments ↗</a><a href="https://developers.jup.ag/docs/swap/get-quote" target="_blank" rel="noopener noreferrer">Jupiter quotes ↗</a><a href="https://solana.com/docs/rpc/http/gettokenaccountsbyowner" target="_blank" rel="noopener noreferrer">Solana RPC ↗</a><a href="https://docs.dexscreener.com/api/reference" target="_blank" rel="noopener noreferrer">DEX market data ↗</a></div></Group></details>
-    <Closing><a className="footer-wordmark" href="#top">DoubleTake<span>LOOK TWICE.</span></a><p>Built for Colosseum’s Crypto World’s Fair.<br/>Read-only xStock research on Solana.</p><a href="https://github.com/RafaTahir/doubletake" target="_blank" rel="noopener noreferrer">Inside the machine ↗</a></Closing>
-  </FileCard>
+function pinProgram(config: RuntimeConfig): RuntimeConfig {
+  const localTest =
+    import.meta.env.VITE_ALLOW_LOCALNET_PROGRAM === "true" &&
+    config.cluster === "localnet" &&
+    ["localhost", "127.0.0.1"].includes(window.location.hostname);
+  const pinned =
+    import.meta.env.VITE_PROGRAM_ID ||
+    (localTest ? DEVELOPMENT_PROGRAM_ID : null);
+  if (config.programId && pinned === config.programId) return config;
+  const reason = pinned
+    ? "The configured strategy program does not match this verified application build."
+    : "A verified strategy program is not configured in this application build.";
+  return {
+    ...config,
+    programId: null,
+    fundingEnabled: false,
+    automationEnabled: false,
+    readiness: { ready: false, reasons: [reason, ...config.readiness.reasons] },
+  };
 }
 
-export default function TradingApp(){return <WalletShell><App/></WalletShell>}
+class WorkspaceBoundary extends React.Component<
+  { children: React.ReactNode },
+  { error: boolean }
+> {
+  state = { error: false };
+  static getDerivedStateFromError() {
+    return { error: true };
+  }
+  render() {
+    return this.state.error ? (
+      <div className="app-shell initial-load">
+        <Banner
+          kind="error"
+          title="The workspace could not display this data"
+          retry={() => window.location.reload()}
+        >
+          Refresh the page to reconnect. No wallet action is triggered by a
+          refresh.
+        </Banner>
+      </div>
+    ) : (
+      this.props.children
+    );
+  }
+}
+
+export function App() {
+  const wallet = useWallet();
+  const [view, setView] = useState<View>(viewFromLocation);
+  const [config, setConfig] = useState<RuntimeConfig | null>(
+    recoveryBuildConfig,
+  );
+  const [configError, setConfigError] = useState("");
+  const [sessionReady, setSessionReady] = useState(false);
+  const [user, setUser] = useState<SessionUser | null>(null);
+  const [sessionError, setSessionError] = useState("");
+  const [authBusy, setAuthBusy] = useState(false);
+  const [markets, setMarkets] = useState<MarketSnapshot[]>([]);
+  const [marketBusy, setMarketBusy] = useState(false);
+  const [marketError, setMarketError] = useState("");
+  const [now, setNow] = useState(Date.now());
+  const marketRunning = useRef(false);
+  const [strategy, setStrategy] = useState<Strategy | null>(null);
+  const [receipts, setReceipts] = useState<ExecutionReceipt[]>([]);
+  const [intents, setIntents] = useState<TransactionIntent[]>([]);
+  const [fees, setFees] = useState<FeeCredit | null>(null);
+  const [preferences, setPreferences] =
+    useState<NotificationPreferences | null>(null);
+  const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
+  const [accountBusy, setAccountBusy] = useState(false);
+  const [accountError, setAccountError] = useState("");
+  const [selectedMint, setSelectedMint] = useState("");
+  const [notice, setNotice] = useState("");
+  const [lastOwnerSignature, setLastOwnerSignature] = useState<string | null>(
+    null,
+  );
+  const importingOwnerActions = useRef(false);
+  const [online, setOnline] = useState(navigator.onLine);
+  const [preparing, setPreparing] = useState(false);
+  const [review, setReview] = useState<PreparedReview | null>(null);
+  const [signing, setSigning] = useState(false);
+  const [signError, setSignError] = useState("");
+  const accountRunning = useRef<string | null>(null);
+  const activeOwner = useRef<string | null>(null);
+  activeOwner.current = user?.wallet || null;
+  const [activityBusy, setActivityBusy] = useState(false);
+  const [activityError, setActivityError] = useState("");
+  const activityRunning = useRef<string | null>(null);
+  const seenReceipts = useRef<Set<string>>(new Set());
+  const emailTokenProcessed = useRef(false);
+  const navigate = useCallback((next: View) => {
+    setView(next);
+    window.history.replaceState(null, "", `#/${next}`);
+    document.getElementById("workspace")?.focus({ preventScroll: true });
+    window.scrollTo(0, 0);
+    setNotice("");
+  }, []);
+  useEffect(() => {
+    const change = () => {
+      const hash = window.location.hash.replace(/^#\/?/, "").toLowerCase();
+      if (views.includes(hash as View)) setView(hash as View);
+    };
+    window.addEventListener("hashchange", change);
+    return () => window.removeEventListener("hashchange", change);
+  }, []);
+  useEffect(() => {
+    const tick = setInterval(() => setNow(Date.now()), 1000);
+    const connection = () => setOnline(navigator.onLine);
+    window.addEventListener("online", connection);
+    window.addEventListener("offline", connection);
+    return () => {
+      clearInterval(tick);
+      window.removeEventListener("online", connection);
+      window.removeEventListener("offline", connection);
+    };
+  }, []);
+  const loadConfig = useCallback(async () => {
+    try {
+      setConfig(pinProgram(await product.config()));
+      setConfigError("");
+    } catch (error) {
+      setConfigError(errorMessage(error));
+    }
+  }, []);
+  const loadMarkets = useCallback(async () => {
+    if (marketRunning.current) return;
+    marketRunning.current = true;
+    setMarketBusy(true);
+    try {
+      setMarkets((await product.markets()).markets);
+      setMarketError("");
+    } catch (error) {
+      setMarketError(errorMessage(error));
+    } finally {
+      setMarketBusy(false);
+      marketRunning.current = false;
+    }
+  }, []);
+  useEffect(() => {
+    void loadConfig();
+    void loadMarkets();
+    product
+      .session()
+      .then((value) => {
+        setUser(value);
+        setSessionError("");
+      })
+      .catch((error) => setSessionError(errorMessage(error)))
+      .finally(() => setSessionReady(true));
+  }, [loadConfig, loadMarkets]);
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible" && navigator.onLine)
+        void loadMarkets();
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [loadMarkets]);
+  const loadAccount = useCallback(async () => {
+    if (!user || accountRunning.current === user.wallet) return;
+    const requestedOwner = user.wallet;
+    accountRunning.current = requestedOwner;
+    setAccountBusy(true);
+    const results = await Promise.allSettled([
+      product.strategy(),
+      product.activity(),
+      product.fees(),
+      product.notifications(),
+      product.portfolio(),
+    ]);
+    if (activeOwner.current !== requestedOwner) {
+      if (accountRunning.current === requestedOwner) {
+        accountRunning.current = null;
+        setAccountBusy(false);
+      }
+      return;
+    }
+    const failures: string[] = [];
+    for (const [index, result] of results.entries()) {
+      if (result.status === "fulfilled") {
+        if (index === 0)
+          setStrategy((result.value as { strategy: Strategy | null }).strategy);
+        else if (index === 1) {
+          const activity = result.value as {
+            receipts: ExecutionReceipt[];
+            intents: TransactionIntent[];
+          };
+          setReceipts(activity.receipts);
+          setIntents(activity.intents);
+          seenReceipts.current = new Set(
+            activity.receipts.map(
+              (receipt) => `${receipt.id}:${receipt.status}`,
+            ),
+          );
+          removePendingSignatures(
+            new Set([
+              ...activity.receipts.map((receipt) => receipt.signature),
+              ...activity.intents
+                .filter(
+                  (intent) =>
+                    ["confirmed", "finalized", "failed", "expired"].includes(
+                      intent.status,
+                    ) && intent.signature,
+                )
+                .map((intent) => intent.signature!),
+            ]),
+          );
+        } else if (index === 2) setFees(result.value as FeeCredit);
+        else if (index === 3)
+          setPreferences(result.value as NotificationPreferences);
+        else setPortfolio(result.value as Portfolio);
+      } else {
+        failures.push(errorMessage(result.reason));
+        if (
+          result.reason instanceof ProductError &&
+          result.reason.status === 401
+        )
+          setUser(null);
+      }
+    }
+    setAccountError([...new Set(failures)].join(" "));
+    setAccountBusy(false);
+    accountRunning.current = null;
+  }, [user?.wallet]);
+  const importPendingOwnerActions = useCallback(async () => {
+    if (!user || importingOwnerActions.current) return;
+    importingOwnerActions.current = true;
+    try {
+      for (const action of pendingOwnerActions(user.wallet)
+        .filter((item) => item.cluster === config?.cluster && !item.importedId)
+        .slice(0, 5)) {
+        try {
+          const imported = await product.importOwnerAction(
+            action.signature,
+            action.action,
+            action.amountRaw,
+          );
+          if (
+            ["confirmed", "finalized", "failed", "expired"].includes(
+              imported.intent.status,
+            )
+          )
+            removePendingSignatures(new Set([action.signature]));
+          else markPendingImported(action.signature, imported.intent.id);
+        } catch {
+          /* Preserve a public signature until the account service can verify it. */
+        }
+      }
+    } finally {
+      importingOwnerActions.current = false;
+    }
+  }, [user?.wallet, config?.cluster]);
+  const loadActivity = useCallback(async () => {
+    if (!user || activityRunning.current === user.wallet) return;
+    const owner = user.wallet;
+    activityRunning.current = owner;
+    setActivityBusy(true);
+    try {
+      const [activity, prefs] = await Promise.all([
+        product.activity(),
+        product.notifications(),
+      ]);
+      if (activeOwner.current !== owner) return;
+      const fresh = activity.receipts.some(
+        (receipt) =>
+          !seenReceipts.current.has(`${receipt.id}:${receipt.status}`),
+      );
+      seenReceipts.current = new Set(
+        activity.receipts.map((receipt) => `${receipt.id}:${receipt.status}`),
+      );
+      setReceipts(activity.receipts);
+      setIntents(activity.intents);
+      setPreferences(prefs);
+      setActivityError("");
+      removePendingSignatures(
+        new Set([
+          ...activity.receipts.map((receipt) => receipt.signature),
+          ...activity.intents
+            .filter(
+              (intent) =>
+                ["confirmed", "finalized", "failed", "expired"].includes(
+                  intent.status,
+                ) && intent.signature,
+            )
+            .map((intent) => intent.signature!),
+        ]),
+      );
+      if (fresh) void loadAccount();
+    } catch (error) {
+      if (activeOwner.current === owner) {
+        setActivityError(errorMessage(error));
+        if (error instanceof ProductError && error.status === 401)
+          setUser(null);
+      }
+    } finally {
+      if (activityRunning.current === owner) {
+        activityRunning.current = null;
+        setActivityBusy(false);
+      }
+    }
+  }, [user?.wallet, loadAccount]);
+  useEffect(() => {
+    if (!user) return;
+    void importPendingOwnerActions();
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible" && navigator.onLine)
+        void importPendingOwnerActions();
+    }, 15_000);
+    return () => clearInterval(timer);
+  }, [user?.wallet, importPendingOwnerActions]);
+  useEffect(() => {
+    if (user) void loadAccount();
+    else {
+      setStrategy(null);
+      setFees(null);
+      setPreferences(null);
+      setPortfolio(null);
+      setReceipts([]);
+      setIntents([]);
+      setAccountError("");
+    }
+  }, [user?.wallet, loadAccount]);
+  useEffect(() => {
+    if (!user) return;
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible" && navigator.onLine)
+        void loadAccount();
+    }, 300_000);
+    return () => clearInterval(timer);
+  }, [user?.wallet, loadAccount]);
+  useEffect(() => {
+    if (!user) return;
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible" && navigator.onLine)
+        void loadActivity();
+    }, 15_000);
+    const visible = () => {
+      if (document.visibilityState === "visible") void loadActivity();
+    };
+    document.addEventListener("visibilitychange", visible);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", visible);
+    };
+  }, [user?.wallet, loadActivity]);
+  useEffect(() => {
+    const token = new URL(window.location.href).searchParams.get("verify");
+    if (!token || !user || emailTokenProcessed.current) return;
+    emailTokenProcessed.current = true;
+    setView("settings");
+    product
+      .confirmEmail(token)
+      .then(() => {
+        setNotice("Email verified. Notification preferences are ready.");
+        void loadAccount();
+      })
+      .catch((error) => setAccountError(errorMessage(error)))
+      .finally(() => {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("verify");
+        url.hash = "/settings";
+        window.history.replaceState(null, "", url);
+      });
+  }, [user?.wallet, loadAccount]);
+  async function signIn() {
+    if (!wallet.publicKey || !wallet.signMessage) return;
+    setAuthBusy(true);
+    setSessionError("");
+    try {
+      const owner = wallet.publicKey.toBase58();
+      const challenge = await product.challenge(owner);
+      validateSignInChallenge(
+        challenge.message,
+        owner,
+        window.location.origin,
+        config?.cluster || challenge.cluster || "mainnet-beta",
+        challenge.expiresAt,
+      );
+      const id = challenge.challengeId || challenge.id;
+      if (!id) throw new Error("The sign-in challenge is incomplete.");
+      const signature = await wallet.signMessage(
+        new TextEncoder().encode(challenge.message),
+      );
+      setUser(await product.verify(owner, id, toBase64(signature)));
+      await loadConfig();
+      setNotice("Wallet signed in. Loading your strategy and balances.");
+    } catch (error) {
+      setSessionError(errorMessage(error));
+    } finally {
+      setAuthBusy(false);
+    }
+  }
+  async function logout() {
+    try {
+      await product.logout();
+      setUser(null);
+      await loadConfig();
+      setView("markets");
+      setNotice("Signed out. Public markets remain available.");
+    } catch (error) {
+      setAccountError(errorMessage(error));
+    }
+  }
+  async function ownerAction(
+    action: OwnerAction,
+    amountRaw?: string,
+    policy?: StrategyPolicy,
+  ) {
+    if (
+      !user ||
+      !wallet.publicKey ||
+      wallet.publicKey.toBase58() !== user.wallet
+    )
+      throw new Error(
+        "Connect the signed-in owner wallet before preparing this action.",
+      );
+    setPreparing(true);
+    setSignError("");
+    try {
+      let intent: TransactionIntent;
+      let independent = false;
+      try {
+        intent = await product.prepare(action, amountRaw, policy);
+      } catch (error) {
+        if (
+          !config?.programId ||
+          !["pause", "revoke", "withdraw"].includes(action)
+        )
+          throw error;
+        const prepared = await prepareIndependentOwnerAction({
+          rpcEndpoint: publicRpc(config),
+          programId: config.programId,
+          owner: user.wallet,
+          action: action as "pause" | "revoke" | "withdraw",
+          amountRaw,
+          cluster: config.cluster,
+        });
+        intent = prepared;
+        independent = true;
+      }
+      setReview({
+        intent,
+        action,
+        amountRaw,
+        policy,
+        independent,
+        rpcEndpoint: independent && config ? publicRpc(config) : undefined,
+      });
+    } finally {
+      setPreparing(false);
+    }
+  }
+  async function reviewFeeFunding(
+    intent: TransactionIntent,
+    expectedRaw: string,
+  ) {
+    if (!user || intent.owner !== user.wallet)
+      throw new Error(
+        "Fee-funding intent does not match the signed-in wallet.",
+      );
+    setFees(await product.fees());
+    setSignError("");
+    setReview({ intent, amountRaw: expectedRaw });
+  }
+  async function signPrepared() {
+    if (
+      !review ||
+      !wallet.publicKey ||
+      wallet.publicKey.toBase58() !== review.intent.owner ||
+      !wallet.signTransaction
+    ) {
+      setSignError(
+        "Connect the owner wallet and use a wallet that supports transaction signing.",
+      );
+      return;
+    }
+    setSigning(true);
+    setSignError("");
+    try {
+      const intent = review.intent;
+      const owner = wallet.publicKey.toBase58();
+      if (intent.owner !== owner || intent.summary.cluster !== config?.cluster)
+        throw new Error(
+          "The prepared transaction has an unexpected owner or network.",
+        );
+      const bytes = fromBase64(intent.unsignedTransactionBase64);
+      if (intent.kind === "fee-funding")
+        validateFeeFunding(intent, owner, fees, review.amountRaw);
+      else {
+        if (!config?.programId || !review.action)
+          throw new Error("Strategy program configuration is unavailable.");
+        validateOwnerTransaction(bytes, {
+          action: review.action,
+          owner,
+          programId: config.programId,
+          amountRaw: review.amountRaw,
+          policy: review.policy,
+          keeper:
+            review.action === "configure"
+              ? fees?.walletAddress
+              : strategy?.keeperAddress,
+          enabled: review.action === "configure",
+        });
+      }
+      const transaction = decodeOwnerTransaction(intent);
+      const originalMessage = decodeOwnerTransaction(intent);
+      const signed = await wallet.signTransaction(transaction);
+      verifyWalletReturnedMessage(originalMessage, signed);
+      const serialized = signed.serialize();
+      if (review.independent) {
+        const connection = new Connection(
+          review.rpcEndpoint || publicRpc(config!),
+          "confirmed",
+        );
+        const signature = signedTransactionSignature(signed);
+        if (
+          !review.action ||
+          !["pause", "revoke", "withdraw", "recover"].includes(review.action)
+        )
+          throw new Error("This independent owner action is not supported.");
+        queueOwnerAction({
+          owner,
+          signature,
+          action: review.action as "pause" | "revoke" | "withdraw" | "recover",
+          amountRaw: review.amountRaw,
+          cluster: config!.cluster,
+          createdAt: new Date().toISOString(),
+        });
+        setLastOwnerSignature(signature);
+        try {
+          const accepted = await connection.sendRawTransaction(serialized, {
+            skipPreflight: false,
+            maxRetries: 0,
+          });
+          if (accepted !== signature)
+            throw new Error("RPC returned an unexpected signature.");
+          setNotice(
+            `Owner transaction ${signature} submitted. It remains pending until Solana confirms it.`,
+          );
+        } catch {
+          setNotice(
+            `Owner transaction ${signature} has an unresolved outcome. Check its signature before submitting another withdrawal.`,
+          );
+        }
+        void importPendingOwnerActions();
+      } else {
+        await product.submit(intent.id, toBase64(serialized));
+        setNotice(
+          "Transaction submitted. Its result remains pending until confirmed on Solana.",
+        );
+      }
+      setReview(null);
+      setView("activity");
+      await loadAccount();
+    } catch (error) {
+      setSignError(errorMessage(error));
+    } finally {
+      setSigning(false);
+    }
+  }
+  const ownerConnected = wallet.publicKey?.toBase58() === user?.wallet;
+  const accountNeeded = view !== "markets";
+  return (
+    <div className="app-shell">
+      <a className="skip-link" href="#workspace">
+        Skip to workspace
+      </a>
+      <header className="masthead">
+        <a
+          className="wordmark"
+          href="#/markets"
+          onClick={() => navigate("markets")}
+          aria-label="DoubleTake markets"
+        >
+          <span className="brand-mark" aria-hidden="true">
+            <i />
+            <i />
+          </span>
+          DoubleTake
+          <span className="brand-edition">THE ATOMIC STRATEGY ENGINE</span>
+        </a>
+        <div className="masthead-right">
+          <span className="network-tag">
+            <i className={config?.readiness.ready ? "" : "disabled"} />
+            {config?.cluster.toUpperCase() || "CONNECTING"}
+          </span>
+          {user ? (
+            <button
+              type="button"
+              className="secondary-button account-button"
+              onClick={() => navigate("settings")}
+            >
+              {shortAddress(user.wallet)}
+            </button>
+          ) : (
+            <WalletConnect />
+          )}
+        </div>
+      </header>
+      <div className="workspace-navigation">
+        <nav className="workspace-tabs" aria-label="Main workspace">
+          {views.map((next) => (
+            <button
+              key={next}
+              type="button"
+              aria-current={view === next ? "page" : undefined}
+              onClick={() => navigate(next)}
+            >
+              {next.charAt(0).toUpperCase() + next.slice(1)}
+            </button>
+          ))}
+        </nav>
+        <span className="edition-note">CAPPED STRATEGIES / OWNER CONTROL</span>
+      </div>
+      <main
+        id="workspace"
+        className="workspace-content"
+        tabIndex={-1}
+        key={view}
+      >
+        {!online && (
+          <Banner kind="error" title="You are offline">
+            Reconnect to refresh markets or submit a wallet action.
+          </Banner>
+        )}
+        {configError && (
+          <Banner
+            kind="error"
+            title="Service configuration unavailable"
+            retry={() => void loadConfig()}
+          >
+            {configError}
+          </Banner>
+        )}
+        {notice && (
+          <Banner kind="success" title="Workspace updated">
+            {notice}
+            {lastOwnerSignature && notice.includes(lastOwnerSignature) && (
+              <>
+                <br />
+                <ExplorerLink
+                  signature
+                  address={lastOwnerSignature}
+                  cluster={config?.cluster}
+                >
+                  Inspect owner transaction
+                </ExplorerLink>
+              </>
+            )}
+          </Banner>
+        )}
+        {view === "markets" && (
+          <Markets
+            markets={markets}
+            config={config}
+            loading={marketBusy}
+            error={marketError}
+            now={now}
+            retry={() => void loadMarkets()}
+            choose={(mint) => {
+              setSelectedMint(mint);
+              navigate("strategies");
+            }}
+          />
+        )}
+        {accountNeeded && !sessionReady ? (
+          <Loading label="Checking your wallet session…" />
+        ) : accountNeeded && !user ? (
+          <>
+            <Heading eyebrow="Owner access" title="Your wallet. Your strategy.">
+              Invited beta wallets can configure a strategy, fund a vault and
+              inspect every transaction. Public market inspection is available
+              to everyone.
+            </Heading>
+            <section className="signin-panel instrument-box">
+              <div className="panel-body">
+                <h2>Connect, then sign in.</h2>
+                <p>
+                  Connect Phantom or Solflare, then sign a single-use message to
+                  verify your wallet. A sign-in message does not authorize a
+                  transfer.
+                </p>
+                <WalletConnect showAddress />
+                {sessionError && (
+                  <Banner kind="error" title="Sign-in could not complete">
+                    {sessionError}
+                  </Banner>
+                )}
+                <button
+                  type="button"
+                  className="brass-button"
+                  onClick={signIn}
+                  disabled={
+                    authBusy || !wallet.connected || !wallet.signMessage
+                  }
+                >
+                  {authBusy
+                    ? "Awaiting sign-in signature…"
+                    : "Sign in with wallet →"}
+                </button>
+                {wallet.connected && !wallet.signMessage && (
+                  <p className="helper negative">
+                    This wallet does not support message signing. Connect
+                    Phantom or Solflare.
+                  </p>
+                )}
+                <p className="helper">
+                  Access is limited to the initial five invited users.
+                  Connecting a wallet does not trigger signatures automatically.
+                </p>
+              </div>
+            </section>
+          </>
+        ) : accountNeeded && user ? (
+          <>
+            {!ownerConnected && (
+              <Banner title="Connect the owner wallet to sign actions">
+                <WalletConnect showAddress />
+                Your current session belongs to {shortAddress(user.wallet)}.
+              </Banner>
+            )}
+            {accountError && view !== "activity" && (
+              <Banner
+                kind="error"
+                title="Account data could not be refreshed"
+                retry={() => void loadAccount()}
+              >
+                {accountError}
+              </Banner>
+            )}
+            {accountBusy && !strategy && !fees && !preferences ? (
+              <Loading label="Loading confirmed balances and account controls…" />
+            ) : view === "strategies" ? (
+              <Strategies
+                key={user.wallet}
+                config={config}
+                markets={markets}
+                strategy={strategy}
+                fees={fees}
+                preferences={preferences}
+                portfolio={portfolio}
+                selectedMint={selectedMint}
+                now={now}
+                busy={preparing || signing}
+                refreshing={accountBusy}
+                reload={loadAccount}
+                ownerAction={ownerAction}
+                openSettings={() => navigate("settings")}
+              />
+            ) : view === "activity" ? (
+              <Activity
+                receipts={receipts}
+                intents={intents}
+                loading={activityBusy || accountBusy}
+                error={activityError}
+                retry={() => void loadActivity()}
+                config={config}
+                openStrategies={() => navigate("strategies")}
+              />
+            ) : (
+              <Settings
+                key={user.wallet}
+                user={user}
+                config={config}
+                fees={fees}
+                preferences={preferences}
+                portfolio={portfolio}
+                busy={preparing || signing}
+                refreshing={accountBusy}
+                reload={loadAccount}
+                reviewFeeFunding={reviewFeeFunding}
+                logout={logout}
+              />
+            )}
+          </>
+        ) : null}
+        {accountNeeded && (
+          <Recovery
+            config={config}
+            owner={wallet.publicKey?.toBase58()}
+            busy={preparing || signing}
+            review={(intent, action, amountRaw, rpcEndpoint) => {
+              setSignError("");
+              setReview({
+                intent,
+                action,
+                amountRaw,
+                independent: true,
+                rpcEndpoint,
+              });
+            }}
+          />
+        )}
+      </main>
+      <footer className="footer">
+        <span>
+          DOUBLETAKE · FREE INVITED BETA
+          <br />
+          USDC vault control stays with your wallet.
+        </span>
+        <span>
+          Automatic cycles require verified deployment,
+          <br />
+          fresh pool state and funded execution fees.
+        </span>
+        <a
+          href="https://github.com/RafaTahir/doubletake/tree/codex/product-beta"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Source & engineering ↗
+        </a>
+      </footer>
+      {review && (
+        <TransactionReview
+          intent={review.intent}
+          policy={review.policy}
+          config={config}
+          busy={signing}
+          error={signError}
+          onClose={() => {
+            if (!signing) setReview(null);
+          }}
+          onSign={() => void signPrepared()}
+        />
+      )}
+    </div>
+  );
+}
+
+export default function Root() {
+  return (
+    <WorkspaceBoundary>
+      <WalletShell>
+        <App />
+      </WalletShell>
+    </WorkspaceBoundary>
+  );
+}
