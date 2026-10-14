@@ -1,0 +1,13 @@
+node_modules
+dist
+build
+.git
+.vercel
+.env*
+.local
+onchain/target
+onchain/.anchor
+*.keypair.json
+onchain/.fixtures
+onchain/fixtures/generated
+outputs

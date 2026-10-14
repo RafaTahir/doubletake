@@ -3,3 +3,14 @@ dist/
 .vercel/
 .vercel
 .env*
+!.env.example
+build/
+.local/
+onchain/target/
+onchain/.anchor/
+onchain/fixtures/generated/
+*.keypair.json
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+node_modules-linux/

@@ -1,0 +1,4 @@
+/target/
+/.surfpool/
+/fixtures/generated/
+/local-test-keypairs/
