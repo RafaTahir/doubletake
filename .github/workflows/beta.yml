@@ -40,7 +40,7 @@ jobs:
       - run: docker build --tag doubletake-beta .
       - name: Verify production startup and disabled funding gates
         run: |
-          trap 'docker rm -f doubletake-smoke >/dev/null 2>&1 || true' EXIT
+          trap 'status=$?; if [ "$status" -ne 0 ]; then docker logs doubletake-smoke; fi; docker rm -f doubletake-smoke >/dev/null 2>&1 || true' EXIT
           docker run --detach --name doubletake-smoke --publish 127.0.0.1:3000:3000 --env APP_ORIGIN=https://doubletake.example doubletake-beta
-          curl --fail --retry 15 --retry-connrefused --retry-delay 1 http://127.0.0.1:3000/healthz
+          curl --fail --retry 15 --retry-all-errors --retry-delay 1 --connect-timeout 1 --max-time 2 http://127.0.0.1:3000/healthz
           docker exec doubletake-smoke node --input-type=module -e 'const response = await fetch("http://127.0.0.1:3000/api/config"); if (!response.ok) throw Error("Production configuration route failed"); const config = await response.json(); if (config.fundingEnabled || config.automationEnabled) throw Error("Unconfigured production enabled capital movement"); console.log("Production runtime healthy; funding and automation disabled");'
