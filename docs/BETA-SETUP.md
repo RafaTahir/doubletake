@@ -17,15 +17,17 @@ Review current [Railway plans](https://docs.railway.com/pricing/plans), [usage l
 
 ### Railway public workspace
 
-The canonical workspace is [doubletake-production-446f.up.railway.app](https://doubletake-production-446f.up.railway.app/). Railway runs the repository's pinned Node 22 Docker image with one replica, `/healthz` checks and at most three failure restarts. Build/deployment settings were configured in Railway's service dashboard; its current new-project interface deprecates the config-file option, so the checked-in `railway.toml` is not the active configuration for this deployment. CI waiting is enabled.
+The canonical workspace is [doubletake-production-446f.up.railway.app](https://doubletake-production-446f.up.railway.app/). Railway uses the repository's Dockerfile and its build logs confirm Node 22.22.2, with one replica in region `iad`, `/healthz` checks and at most three failure restarts. Active deployment `99e2b963-d6f7-4b14-8544-b6d791098ea1` uses commit `d2c3424cd07e8da9ec69aa3fe1818679db931ab6`. Build/deployment settings were configured in Railway's service dashboard; its current new-project interface deprecates the config-file option, so the checked-in `railway.toml` is not the active configuration for this deployment.
+
+Automatic GitHub deployment is disabled in Railway's Source settings to freeze the verified beta. The dashboard's “Wait for CI” checkbox is consequently unchecked; Railway does not enforce that gate automatically. For each future release, verify CI success for the exact source commit, deploy manually, then check health, configuration and live market responses. Documentation-only pushes do not restart the current container.
 
 The 1 GB persistent volume is mounted at `/data`; the public RPC usage counter uses `/data/backups/.rpc-usage.json`. The trial plan advertises maxima of 2 vCPU and 1 GB memory, but its CPU/memory sliders are disabled: lower custom resource limits were not set. These plan maxima and the trial credit cap are not an ongoing US$20 paid billing limit.
 
-Signed-out checks returned healthy process status, a configuration-required readiness state with `accountsReady=false`, anonymous session status and all seven real market observations. Funding and automation are false and the program identity is null. Postgres, email, fee/backup encryption keys, a verified program and invitees remain unset. Financial backup and restore are unverified. See [release evidence](RELEASE-STATUS.md) for identifiers and the tested scope.
+Signed-out checks returned healthy process status, a configuration-required readiness state with `accountsReady=false`, anonymous session status and all seven real market observations. The active application's canonical metadata points to Railway and its checked frontend asset is `index-D-jcudr_.js`. Funding and automation are false and the program identity is null. Postgres, email, fee/backup encryption keys, a verified program and invitees remain unset. Financial backup and restore are unverified. See [release evidence](RELEASE-STATUS.md) for identifiers and the tested scope.
 
 ### Earlier Vercel deployment
 
-The historical Vercel project is named `stocklana`. Its public-market-only adapter and prior deployment identifiers remain in source and release evidence. That adapter has no database, fee-wallet signer or keeper; its request and RPC counters are per instance rather than durable monthly controls. A redirect from `doubletake-app.vercel.app` to Railway is being prepared; do not claim it is live until the HTTP response and destination are verified.
+The historical Vercel project is named `stocklana`. Its public-market-only adapter and prior deployment identifiers remain in source and release evidence. That adapter has no database, fee-wallet signer or keeper; its request and RPC counters are per instance rather than durable monthly controls. The current `doubletake-app.vercel.app` deployment returns HTTP 307 to Railway. Both a signed-out root HTTP request and browser navigation verified the destination workspace. The root redirect is explicit, alongside the rule for other paths.
 
 ### Complete persistent account services
 
@@ -76,7 +78,7 @@ Production migration requires the explicit admin URL; its optional CA falls back
 
 ## Cutover and operations
 
-Railway is the canonical public workspace. Verify the planned Vercel redirect and update public links while preserving deployment history. Hosting checks do not establish that financial workflows are complete.
+Railway is the canonical public workspace, and the verified Vercel redirect preserves the old public address. Preserve deployment history when updating public links. Hosting checks do not establish that financial workflows are complete.
 
 Account services, funding, accounting, refunds, email and automation require the remaining Node-service prerequisites. The existing Vercel configuration disables automatic deployment for `codex/product-beta` using [Vercel's branch configuration](https://vercel.com/docs/project-configuration/git-configuration); manual promotion changes production only after verification. Review host and deployment settings before merging.
 
